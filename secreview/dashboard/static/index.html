@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>secreview dashboard</title>
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#2f81f7;
+--ok:#3fb950;--warn:#d29922;--bad:#f85149;--purple:#a371f7}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+a{color:var(--accent);text-decoration:none}
+header{background:#010409;border-bottom:1px solid var(--line);padding:10px 20px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:10}
+header h1{font-size:16px;margin:0;font-weight:600}
+header .sub{color:var(--muted);font-size:12px}
+.layout{display:flex;height:calc(100vh - 49px)}
+.sidebar{width:300px;border-right:1px solid var(--line);overflow-y:auto;flex-shrink:0;background:var(--panel)}
+.main{flex:1;overflow-y:auto;padding:18px 22px}
+.newscan{padding:12px;border-bottom:1px solid var(--line)}
+.newscan input,.newscan select{width:100%;background:#0d1117;border:1px solid var(--line);color:var(--text);border-radius:6px;padding:7px 9px;margin:4px 0;font-size:13px}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:7px 12px;cursor:pointer;font-size:13px;font-weight:500}
+.btn:hover{filter:brightness(1.1)} .btn.sm{padding:3px 9px;font-size:12px}
+.btn.ok{background:var(--ok)} .btn.bad{background:var(--bad)} .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+.runrow{padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12px}
+.runrow:hover{background:#1c2128} .runrow.active{background:#1f6feb22;border-left:3px solid var(--accent)}
+.runrow .id{font-family:ui-monospace,Consolas,monospace;font-size:11px}
+.runrow .meta{color:var(--muted);margin-top:2px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.d-running{background:var(--accent);animation:pulse 1s infinite} .d-done{background:var(--ok)}
+.d-failed{background:var(--bad)}
+@keyframes pulse{50%{opacity:.3}}
+.stages{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 18px}
+.stage{flex:1;min-width:120px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.stage .name{font-weight:600;text-transform:capitalize}
+.stage .bar{height:5px;background:#0d1117;border-radius:3px;margin-top:7px;overflow:hidden}
+.stage .fill{height:100%;background:var(--accent);transition:width .3s}
+.stage.done .fill{background:var(--ok)} .stage.running .name:after{content:" ·";animation:pulse 1s infinite}
+.stage .note{color:var(--muted);font-size:11px;margin-top:5px;min-height:14px}
+.tiles{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 16px;min-width:92px}
+.tile .n{font-size:22px;font-weight:700} .tile .l{color:var(--muted);font-size:11px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tab{padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);font-size:13px}
+.tab.active{color:var(--text);border-bottom-color:var(--accent)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px}
+.chead{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.sev{color:#fff;border-radius:4px;padding:1px 7px;font-size:10px;text-transform:uppercase;font-weight:700}
+.sev-critical{background:#b3123b}.sev-high{background:#d9480f}.sev-medium{background:#9e6a03}.sev-low{background:#1f6feb}.sev-info{background:#555}
+.pill{border-radius:10px;padding:1px 9px;font-size:11px;font-weight:600}
+.st-verified_fixed{background:#1a7f3733;color:var(--ok)}.st-patch_unverified{background:#9a670033;color:var(--warn)}
+.st-needs_review{background:#8250df33;color:var(--purple)}.st-discarded{background:#8b949e22;color:var(--muted)}
+.st-report_only{background:#30363d;color:var(--muted)}.st-grounded{background:#1f6feb22;color:var(--accent)}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.muted{color:var(--muted)} .loc{font-size:12px;margin:6px 0}
+details{margin-top:8px} summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:12px;margin-top:6px}
+th,td{border:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.diff{font-family:ui-monospace,Consolas,monospace;font-size:12px;border:1px solid var(--line);border-radius:6px;overflow:auto;margin-top:6px}
+.diff div{padding:0 8px;white-space:pre}.diff .add{background:#1a7f3722}.diff .del{background:#f8514922}.diff .hunk{background:#1f6feb22;color:var(--accent)}
+.log{background:#010409;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;max-height:320px;overflow-y:auto}
+.log .l-warn{color:var(--warn)}.log .l-error{color:var(--bad)}.log .ts{color:var(--muted)}
+.perm{background:#9a670018;border:1px solid var(--warn);border-radius:8px;padding:10px 12px;margin-bottom:10px}
+.perm .acts{margin-top:8px;display:flex;gap:8px}
+.empty{color:var(--muted);text-align:center;padding:40px}
+.filterbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:14px;padding:3px 11px;cursor:pointer;font-size:12px}
+.chip.active{background:var(--accent);border-color:var(--accent)}
+.route{color:var(--accent)} .badge-auth{color:var(--ok)}.badge-open{color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🛡 secreview</h1>
+  <span class="sub" id="hdrsub">Self-Verifying AI Security Reviewer</span>
+  <span style="flex:1"></span>
+  <span class="sub" id="conn"></span>
+</header>
+<div class="layout">
+  <div class="sidebar">
+    <div class="newscan">
+      <div style="font-weight:600;margin-bottom:4px">New scan</div>
+      <input id="projpath" placeholder="path to project to scan" />
+      <select id="provider">
+        <option value="">LLM: disabled (deterministic only)</option>
+        <option value="local">LLM: local (Ollama)</option>
+        <option value="openrouter">LLM: OpenRouter</option>
+        <option value="gemini">LLM: Gemini</option>
+      </select>
+      <select id="sandbox">
+        <option value="docker">Sandbox: docker (isolated)</option>
+        <option value="local">Sandbox: local (dev, not isolated)</option>
+      </select>
+      <label class="muted" style="font-size:12px"><input type="checkbox" id="noground" style="width:auto"> ablation: skip Ground</label>
+      <button class="btn" style="width:100%;margin-top:6px" onclick="startScan()">Start scan</button>
+      <div id="scanmsg" class="muted" style="font-size:11px;margin-top:4px"></div>
+    </div>
+    <div id="runlist"></div>
+  </div>
+  <div class="main" id="main"><div class="empty">Select a run, or start a new scan.</div></div>
+</div>
+
+<script>
+const $ = (s,el=document)=>el.querySelector(s);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let state = {runId:null, tab:"findings", lastEvent:0, findings:[], endpoints:[], run:null, filter:"all", timer:null};
+
+async function api(path, opts){ const r = await fetch(path, opts); if(!r.ok) throw new Error(r.status); return r.json(); }
+
+async function loadRuns(){
+  try{
+    const runs = await api("/api/runs");
+    $("#conn").textContent = "connected";
+    $("#runlist").innerHTML = runs.map(r=>{
+      const s = r.summary||{};
+      return `<div class="runrow ${r.id===state.runId?'active':''}" onclick="openRun('${r.id}')">
+        <div class="id"><span class="dot d-${r.status}"></span>${esc(r.id)}</div>
+        <div class="meta">${esc((r.target||'').split(/[\\/]/).pop())} · ${r.status}${s.reportable!=null?` · ${s.reportable} findings`:''}</div>
+      </div>`;
+    }).join("") || '<div class="empty">no runs yet</div>';
+  }catch(e){ $("#conn").textContent="backend offline"; }
+}
+
+async function startScan(){
+  const project = $("#projpath").value.trim();
+  if(!project){ $("#scanmsg").textContent="enter a project path"; return; }
+  const options = {"llm.enabled": !!$("#provider").value, "verify.sandbox": $("#sandbox").value,
+                   "permissions.mode":"ask"};
+  if($("#provider").value) options["llm.provider"]=$("#provider").value;
+  $("#scanmsg").textContent="starting…";
+  try{
+    const r = await api("/api/scan",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({project, options, no_ground: $("#noground").checked})});
+    $("#scanmsg").textContent="";
+    await loadRuns();
+    if(r.run_id) openRun(r.run_id);
+  }catch(e){ $("#scanmsg").textContent="failed to start (check the path)"; }
+}
+
+function openRun(id){
+  state.runId=id; state.lastEvent=0; state.logHTML="";
+  if(state.timer) clearInterval(state.timer);
+  loadRuns(); refresh();
+  state.timer = setInterval(refresh, 1200);
+}
+
+async function refresh(){
+  if(!state.runId) return;
+  try{
+    state.run = await api(`/api/runs/${state.runId}`);
+    state.findings = await api(`/api/runs/${state.runId}/findings`);
+    state.endpoints = await api(`/api/runs/${state.runId}/endpoints`);
+    state.perms = await api(`/api/runs/${state.runId}/permissions`);
+    const ev = await api(`/api/runs/${state.runId}/events?after=${state.lastEvent}`);
+    if(ev.length){ state.lastEvent = ev[ev.length-1].id;
+      state.logHTML = (state.logHTML||"") + ev.map(e=>
+        `<div><span class="ts">${new Date(e.ts*1000).toLocaleTimeString()}</span> <span class="l-${e.level}">${esc(e.stage?`[${e.stage}] `:'')}${esc(e.message)}</span></div>`).join(""); }
+    render();
+    if(state.run.status!=="running" && state.timer){ clearInterval(state.timer); state.timer=null; loadRuns(); }
+  }catch(e){}
+}
+
+function render(){
+  const run = state.run, s = run.summary||{}, m = $("#main");
+  const stages = run.stages||[];
+  const pending = (state.perms||[]).filter(p=>p.status==="pending");
+  const permHTML = pending.map(p=>`<div class="perm"><b>Permission requested:</b> ${esc(p.detail)}
+    <div class="acts"><button class="btn ok sm" onclick="decide('${p.id}','approve')">Approve</button>
+    <button class="btn bad sm" onclick="decide('${p.id}','deny')">Deny</button>
+    <button class="btn ghost sm" onclick="decide('${p.id}','approve',true)">Approve + remember</button></div></div>`).join("");
+
+  m.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <h2 style="margin:0;font-size:16px"><span class="dot d-${run.status}"></span>${esc(run.id)}</h2>
+      <span class="muted mono">${esc(run.target)}</span>
+      ${run.status==='done'?`<a class="btn ghost sm" href="/api/runs/${run.id}/report" target="_blank" onclick="event.stopPropagation()">report.html on disk</a>`:''}
+    </div>
+    ${permHTML}
+    <div class="stages">${stages.map(st=>{
+      const pct = st.total? Math.round(100*st.done/st.total) : (st.status==='done'?100:st.status==='running'?30:0);
+      return `<div class="stage ${st.status}"><div class="name">${esc(st.name)}</div>
+        <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
+        <div class="note">${esc(st.note||st.status)}</div></div>`;}).join("")}</div>
+    <div class="tiles">
+      ${tile(s.reportable,'reportable','')}
+      ${tile(s.verified_fixed,'verified fixed','var(--ok)')}
+      ${tile(s.patch_unverified,'patch unverified','var(--warn)')}
+      ${tile(s.needs_review,'needs review','var(--purple)')}
+      ${tile(s.discarded,'discarded (FP)','var(--muted)')}
+      ${tile((state.endpoints||[]).length,'endpoints','')}
+    </div>
+    <div class="tabs">
+      ${tab('findings','Findings ('+state.findings.filter(f=>f.status!=='discarded').length+')')}
+      ${tab('endpoints','API surface ('+(state.endpoints||[]).length+')')}
+      ${tab('log','Event log')}
+    </div>
+    <div id="tabbody"></div>`;
+  renderTab();
+}
+function tile(n,l,c){ return `<div class="tile"><div class="n" style="color:${c||'var(--text)'}">${n==null?'–':n}</div><div class="l">${l}</div></div>`; }
+function tab(id,label){ return `<div class="tab ${state.tab===id?'active':''}" onclick="state.tab='${id}';renderTab()">${label}</div>`; }
+
+function renderTab(){
+  const b = $("#tabbody"); if(!b) return;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.textContent.toLowerCase().startsWith(state.tab)));
+  if(state.tab==='log'){ b.innerHTML = `<div class="log">${state.logHTML||'<span class="muted">waiting…</span>'}</div>`;
+    const lg=b.querySelector('.log'); if(lg) lg.scrollTop=lg.scrollHeight; return; }
+  if(state.tab==='endpoints'){ b.innerHTML = endpointsTable(); return; }
+  // findings
+  const classes = [...new Set(state.findings.filter(f=>f.status!=='discarded').map(f=>f.vuln_class))];
+  const shown = state.findings.filter(f=>f.status!=='discarded' &&
+    (state.filter==='all'||f.status===state.filter||f.vuln_class===state.filter));
+  b.innerHTML = `<div class="filterbar">
+      ${chip('all','All')}
+      ${chip('verified_fixed','Verified')}${chip('patch_unverified','Unverified')}
+      ${chip('needs_review','Needs review')}${chip('report_only','General bugs')}
+    </div>` + (shown.length? shown.map(findingCard).join("") : '<div class="empty">no findings</div>');
+}
+function chip(f,l){ const n=f==='all'?state.findings.filter(x=>x.status!=='discarded').length:state.findings.filter(x=>x.status===f).length;
+  return `<button class="chip ${state.filter===f?'active':''}" onclick="state.filter='${f}';renderTab()">${l} ${n?`(${n})`:''}</button>`; }
+
+function findingCard(f){
+  const ev = f.evidence||{}, patch = f.patch||f.recommended_patch, ep=f.endpoint;
+  const chain = (ev.chain||[]).map(s=>`<tr><td class="muted">${s.line}</td><td class="mono">${esc(s.code)}</td><td class="muted">${esc(s.note)}</td></tr>`).join("");
+  return `<div class="card">
+    <div class="chead">
+      <span class="sev sev-${f.severity}">${f.severity}</span>
+      <span class="pill st-${f.status}">${esc(f.status.replace(/_/g,' '))}</span>
+      <b>${esc(f.title)}</b><span class="muted">${esc((f.cwe||[]).join(', '))}</span>
+    </div>
+    <div class="loc"><span class="mono">${esc(f.file)}:${f.line}</span>
+      ${ep?` · <span class="route">${esc(ep.method)} ${esc(ep.path)}</span>`:''}
+      · <span class="muted">${esc(f.tool)}/${esc(f.rule_id)}</span></div>
+    <div>${esc(f.message)}</div>
+    ${f.attack?`<div class="muted" style="font-size:12px;margin-top:3px"><b>Enables:</b> ${esc(f.attack)}</div>`:''}
+    ${chain?`<details open><summary>Evidence (${ev.method}${ev.llm_used?' · LLM':''})</summary><table><tr><th>Line</th><th>Code</th><th>Role</th></tr>${chain}</table></details>`:`<div class="muted" style="font-size:12px;margin-top:4px">${esc(ev.summary||'')}</div>`}
+    ${f.provenance&&f.provenance.commit?`<div class="muted" style="font-size:11px;margin-top:4px">last changed in ${esc(f.provenance.commit)} by ${esc(f.provenance.author)} ${esc(f.provenance.date)}</div>`:''}
+    ${patch&&patch.diff?`<details><summary>${f.patch?'Patch (verified)':'Recommended patch (unverified)'} — ${esc(patch.source)}</summary>${diff(patch.diff)}</details>`:''}
+    ${verif(f.verification)}
+    <div class="muted" style="font-size:11px;margin-top:6px">Fix: ${esc(f.remediation)}</div>
+  </div>`;
+}
+function diff(d){ return `<div class="diff">${d.split("\n").map(l=>{const c=l[0]==='+'&&l[1]!=='+'?'add':l[0]==='-'&&l[1]!=='-'?'del':l.startsWith('@@')?'hunk':'';return `<div class="${c}">${esc(l)}</div>`;}).join("")}</div>`; }
+function verif(v){ if(!v||!v.length) return '';
+  return `<details><summary>Verification log (${v.length} attempt${v.length>1?'s':''})</summary><table>
+    <tr><th>#</th><th>Patch</th><th>Probe before</th><th>Probe after</th><th>Tests</th><th>Pass</th></tr>
+    ${v.map(a=>`<tr><td>${a.attempt}</td><td>${esc(a.patch_source)}</td><td>${esc(a.exploit_before)}</td><td>${esc(a.exploit_after)}</td><td>${esc(a.regression)}</td><td>${a.passed?'✅':'❌'}</td></tr>`).join("")}</table></details>`; }
+
+function endpointsTable(){
+  const eps = state.endpoints||[];
+  if(!eps.length) return '<div class="empty">no HTTP endpoints detected</div>';
+  return `<table><tr><th>Method</th><th>Path</th><th>Auth</th><th>Roles</th><th>Rate limit</th><th>Location</th></tr>
+    ${eps.map(e=>`<tr><td>${esc(e.method)}</td><td class="mono route">${esc(e.path)}</td>
+      <td class="${e.auth?'badge-auth':'badge-open'}">${e.auth?'🔒 yes':'🔓 no'}</td>
+      <td>${esc((e.roles||[]).join(', '))}</td><td>${e.rate_limited?'✓':''}</td>
+      <td class="muted mono">${esc(e.file)}:${e.line}</td></tr>`).join("")}</table>`;
+}
+
+async function decide(pid,decision,remember){
+  await api(`/api/permissions/${pid}/${decision}?remember=${remember?'true':'false'}`,{method:"POST"});
+  refresh();
+}
+
+loadRuns(); setInterval(loadRuns, 4000);
+</script>
+</body>
+</html>

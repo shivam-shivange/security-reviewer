@@ -54,6 +54,13 @@ def create_app(cfg: Config):
     def endpoints(run_id: str):
         return store.endpoints(run_id)
 
+    @app.get("/api/runs/{run_id}/report", response_class=HTMLResponse)
+    def report_html(run_id: str):
+        path = cfg.workspace / "runs" / run_id / "report.html"
+        if not path.is_file():
+            raise HTTPException(404, "report not generated yet")
+        return path.read_text(encoding="utf-8")
+
     @app.get("/api/runs/{run_id}/permissions")
     def permissions(run_id: str):
         return store.permissions(run_id)
