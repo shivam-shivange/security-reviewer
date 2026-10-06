@@ -122,6 +122,19 @@ event log, findings (evidence/diff/verification), API-surface table, permission 
 Git: still local only (not pushed; user chose "keep local"). Only `examples/flask-vuln` exists as a
 built-in smoke-test fixture (user informed).
 
+### Known issues / gaps (noted 2026-10-07)
+- **Patch is not a visible pipeline stage.** The pipeline surfaces Discover → Detect → Ground →
+  Verify → Report (see `pipeline.py`), but **Patch** has no stage of its own: patch candidates are
+  generated *inside* the Verify stage (`verify/engine.py` calls `patch/engine.candidates()` per
+  finding). So the dashboard/progress never shows a "Patch" step. User flagged this 2026-10-07;
+  **deferred**. Fix later by either (a) adding an explicit Patch stage that pre-generates candidate
+  patches for all grounded findings before Verify and reports progress, or (b) renaming the stage to
+  "Patch & Verify" so the UI reflects what happens. The Patch *code* is complete and working
+  (42 templates + semgrep-fix + dependency bump + LLM fallback); only its visibility as a stage is
+  missing.
+- Dashboard concurrency: runs one scan at a time; orphaned "running" runs are swept to failed on
+  restart (fixed 2026-10-07). npm audit / pip-audit now time-bounded (fixed 2026-10-07).
+
 ## 7. Gotchas learned (save time later)
 - **Semgrep skips dot-directories and respects the enclosing git repo's `.gitignore`.** Scanning a
   copy placed under a `.`-prefixed or git-ignored folder returns 0 findings. Tests copy the sample
