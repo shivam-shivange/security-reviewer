@@ -117,7 +117,22 @@ Built:
 **TODO:** web dashboard (CLI stub present), Java verification harness, Node harness wired into Docker
 image, more sample apps (Express/Spring), evaluation runner for `docs/datasets.md`.
 
-## 6. Change log
+## 7. Gotchas learned (save time later)
+- **Semgrep skips dot-directories and respects the enclosing git repo's `.gitignore`.** Scanning a
+  copy placed under a `.`-prefixed or git-ignored folder returns 0 findings. Tests copy the sample
+  into a non-ignored dir and `git init` it.
+- **Semgrep on Windows hangs when the scan target is under `%TEMP%`** (`AppData\Local\Temp`), likely
+  Defender. Keep scan targets on the project drive; `scan.semgrep_timeout_seconds` bounds it.
+- Semgrep rejects YAML anchors → authored in `rules/semgrep_src/`, expanded by
+  `scripts/build_rules.py`; `scripts/quote_rule_scalars.py` quotes scalars containing `: `.
+- The base `.venv` needs `flask`/`django` for local-mode harness to import common apps.
+- Windows local sandbox can't run bash-shell cmdi payloads or `/tmp` canary paths → cmdi &
+  path-traversal verify on Docker/Linux, not Windows local mode (expected).
+
+## 8. Change log
+- 2026-10-06: **Initial implementation committed** (commit 5979150, 104 files, local only — NOT
+  pushed to the public remote yet, pending user confirmation; .docx kept out of git — contain PII).
+  End-to-end pipeline working; 17 tests pass.
 - 2026-10-06: Added the dual/triple LLM option (local Ollama / OpenRouter / Gemini) to both .docx
   files (abstract, software & hardware requirements, table 7.2, new "LLM backend selection" paragraph,
   best-practices bullet). Originals backed up outside the repo.
