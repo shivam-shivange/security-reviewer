@@ -1,0 +1,44 @@
+# Knowledge base for the endpoint inventory / access-control analyzer (secreview/detect/access).
+# Regexes are matched (case-insensitive) against middleware names, decorators, annotations and
+# dependency names. Extend these lists for project-specific conventions, or override them in the
+# scanned project's .secreview.toml under [access].
+
+auth_markers: >-
+  \b(auth|authenticate|authenticated|requireauth|require_auth|isauthenticated|is_authenticated|ensureauth|
+  ensureauthenticated|ensureloggedin|verifytoken|verify_token|verifyjwt|checkjwt|jwtauth|jwt_required|
+  token_required|login_required|loginrequired|requirelogin|islogged|isloggedin|protect|protected|requireuser|
+  withauth|authmiddleware|auth_middleware|validatetoken|checkauth|passport\.authenticate|expressjwt|
+  get_current_user|get_current_active_user|current_user|oauth2_scheme|httpbearer|apikeyheader|
+  requires_auth|auth_required|authenticationrequired|firebaseauth|clerk|requireauthentication)\b
+role_markers: >-
+  \b(admin|isadmin|is_admin|adminonly|admin_required|role|roles|requirerole|require_role|checkrole|hasrole|
+  hasanyrole|hasauthority|authorize|authorise|permit|permission|permissions|permission_required|
+  roles_required|roles_accepted|restrictto|allowroles|rbac|acl|can|superuser|staff_member_required|
+  is_staff|is_superuser|user_passes_test|preauthorize|secured|rolesallowed|isowner|owner)\b
+rate_limit_markers: >-
+  (ratelimit|rate_limit|ratelimiter|limiter|slowdown|express-rate-limit|express-slow-down|throttle|
+  bucket4j|resilience4j|@ratelimiter|flask_limiter|slowapi|brute|lockout|rate-limiter-flexible)
+
+# Paths that are expected to be public.
+public_paths: >-
+  (^/?$|login|logout|log-in|signin|sign-in|signup|sign-up|register|forgot|reset-password|password/reset|
+  verify-email|confirm|refresh|oauth|callback|health|healthz|ready|status|ping|version|public|docs|swagger|
+  openapi|api-docs|static|assets|favicon|robots\.txt|webhook)
+# Paths that expose sensitive data or operations.
+sensitive_paths: >-
+  (admin|internal|manage|management|users?|accounts?|members?|customers?|employees?|orders?|payments?|
+  billing|invoices?|transactions?|transfer|wallet|balance|salary|payroll|config|settings|export|import|
+  upload|delete|remove|debug|reports?|keys?|tokens?|secrets?|logs?|audit|backup|profile|me|roles?|
+  permissions?|password)
+privileged_paths: (admin|internal|manage|management|staff|superuser|root|system|config|roles?|permissions?|audit|backup|debug)
+login_paths: (login|signin|sign-in|log-in|auth/token|token|authenticate|password|reset|otp|verify|register|signup|sign-up|2fa|mfa)
+
+# Handler-body evidence
+owner_check_markers: >-
+  (req\.user|request\.user|current_user|g\.user|session\[|req\.session|principal|authentication|
+  @authenticationprincipal|securitycontextholder|getcurrentuser|currentuser|userid\s*[!=]==?|owner|
+  createdby|created_by|user_id\s*==|userId\s*:\s*req\.user)
+role_check_markers: >-
+  (\.role\b|\.roles\b|isadmin|is_admin|is_staff|is_superuser|hasrole|hasauthority|haspermission|
+  has_perm|permission|\badmin\b)
+sensitive_fields: (password|passwd|password_?hash|hash|salt|secret|token|api_?key|ssn|otp|reset_?token|refresh_?token|credit_?card|cvv|pin)

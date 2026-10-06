@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secreview"
+version = "0.1.0"
+description = "Self-Verifying AI Security Reviewer: Detect -> Ground -> Patch -> Verify"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "requests>=2.31",
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "tree-sitter>=0.23",
+    "tree-sitter-language-pack>=0.7",
+]
+
+[project.optional-dependencies]
+tools = ["semgrep", "bandit", "pip-audit", "ruff"]
+dev = ["pytest>=8"]
+
+[project.scripts]
+secreview = "secreview.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["secreview*"]
+
+[tool.setuptools.package-data]
+secreview = ["dashboard/static/*", "report/templates/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

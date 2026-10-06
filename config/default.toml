@@ -1,0 +1,89 @@
+# Default configuration. Override with --config <file>, a `.secreview.toml` in the scanned
+# project, or SECREVIEW_* environment variables (see .env.example).
+
+[llm]
+enabled = true
+provider = "local"            # local | openrouter | gemini
+temperature = 0.1
+timeout_seconds = 180
+max_retries = 2
+cache = true                  # cache responses by prompt hash; repeat scans cost nothing
+
+[llm.local]
+host = "http://localhost:11434"
+model = "qwen2.5-coder:7b"
+
+[llm.openrouter]
+base_url = "https://openrouter.ai/api/v1"
+model = "qwen/qwen-2.5-coder-32b-instruct"
+api_key_env = "OPENROUTER_API_KEY"
+
+[llm.gemini]
+base_url = "https://generativelanguage.googleapis.com/v1beta"
+model = "gemini-2.5-flash"
+api_key_env = "GEMINI_API_KEY"
+
+[scan]
+languages = ["python", "java", "javascript"]
+exclude = [
+  ".git", "node_modules", "bower_components", "vendor", "dist", "build", "target", "out",
+  ".venv", "venv", "env", "__pycache__", ".gradle", ".idea", ".vscode", "coverage",
+  ".next", ".nuxt", "*.min.js", "*.bundle.js", "*.map", "migrations",
+]
+max_file_kb = 1024
+include_tests = false          # findings inside test files are dropped unless true
+semgrep_jobs = 0               # 0 = semgrep default (number of CPUs)
+semgrep_timeout_seconds = 600  # hard cap on the whole semgrep scan
+semgrep_registry = []          # optional extra registry packs, e.g. ["p/owasp-top-ten"] (needs network)
+per_module = true              # scan module by module (large repos)
+
+[detect]
+semgrep = true
+bandit = true
+secrets = true
+dependencies = true
+access_control = true
+general_bugs = true
+
+[ground]
+llm = "auto"                   # auto = only ambiguous findings | always | never
+slice_context_lines = 25
+min_confidence = 0.5
+unverifiable_chain = "discard"  # discard | review - when the LLM's evidence chain fails the source check
+
+[patch]
+templates = true
+llm_fallback = true
+candidates = 2                 # self-consistency: candidates per LLM attempt
+
+[verify]
+enabled = true
+sandbox = "docker"             # docker | local (local is NOT isolated; dev only)
+max_retries = 3
+timeout_seconds = 600
+network = "none"               # none = no internet inside the sandbox
+run_regression = true
+install_deps = true            # local sandbox: pip install project requirements into a venv
+keep_sandbox = false           # keep the sandbox copy after the run (debugging)
+build_timeout_seconds = 1800
+
+[poc]
+templates = true
+llm_fallback = false
+
+[general_bugs]
+report = true
+deterministic_fix = true       # show Ruff / ESLint autofix diffs as the recommended patch
+llm_patch = false              # implemented, disabled by default (user decision 2026-10-06)
+
+[permissions]
+mode = "ask"                   # ask | auto-approve | deny
+# Actions that always need approval in "ask" mode:
+#   docker_build, run_project_code, send_code_to_cloud_llm, apply_patch, network_install
+
+[dashboard]
+host = "127.0.0.1"
+port = 8765
+
+[paths]
+workspace = "workspace"        # database, run outputs, caches, sandboxes (git-ignored)

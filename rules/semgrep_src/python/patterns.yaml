@@ -1,0 +1,289 @@
+# Python configuration / crypto / access-control / leakage rules (pattern based).
+# `fix:` gives a deterministic, LLM-free patch where the change is mechanical.
+rules:
+  - id: py-yaml-load
+    languages: [python]
+    severity: ERROR
+    message: yaml.load without SafeLoader can construct arbitrary Python objects.
+    metadata: { class: deserialization, confidence: high }
+    patterns:
+      - pattern: yaml.load($X)
+    fix: yaml.safe_load($X)
+
+  - id: py-pickle-load
+    languages: [python]
+    severity: WARNING
+    message: pickle/marshal deserialisation executes code if the data is attacker-controlled.
+    metadata: { class: deserialization, confidence: low }
+    pattern-either:
+      - pattern: pickle.loads(...)
+      - pattern: pickle.load(...)
+      - pattern: marshal.loads(...)
+      - pattern: shelve.open(...)
+
+  - id: py-tls-verify-disabled
+    languages: [python]
+    severity: ERROR
+    message: TLS certificate verification is disabled (verify=False).
+    metadata: { class: tls_validation, confidence: high }
+    patterns:
+      - pattern-either:
+          - pattern: requests.$M(..., verify=False, ...)
+          - pattern: httpx.$M(..., verify=False, ...)
+          - pattern: $S.$M(..., verify=False, ...)
+      - pattern: $FN(..., verify=False, ...)
+    fix-regex:
+      regex: verify\s*=\s*False
+      replacement: verify=True
+
+  - id: py-tls-unverified-context
+    languages: [python]
+    severity: ERROR
+    message: An SSL context that skips certificate validation is used.
+    metadata: { class: tls_validation, confidence: high }
+    pattern-either:
+      - pattern: ssl._create_unverified_context(...)
+      - pattern: $CTX.check_hostname = False
+      - pattern: $CTX.verify_mode = ssl.CERT_NONE
+
+  - id: py-flask-debug
+    languages: [python]
+    severity: WARNING
+    message: Flask debug mode exposes the Werkzeug debugger (remote code execution).
+    metadata: { class: debug_enabled, confidence: high }
+    pattern: $APP.run(..., debug=True, ...)
+    fix-regex:
+      regex: debug\s*=\s*True
+      replacement: debug=False
+
+  - id: py-django-debug
+    languages: [python]
+    severity: WARNING
+    message: Django DEBUG = True in settings.
+    metadata: { class: debug_enabled, confidence: medium }
+    paths: { include: ["*settings*.py"] }
+    pattern: DEBUG = True
+    fix: DEBUG = False
+
+  - id: py-weak-password-hash
+    languages: [python]
+    severity: ERROR
+    message: Password hashed with a fast, unsalted hash. Use bcrypt / argon2 / werkzeug generate_password_hash.
+    metadata: { class: weak_credential_storage, confidence: high }
+    patterns:
+      - pattern-either:
+          - pattern: hashlib.$H($PW, ...)
+          - pattern: hashlib.$H($PW.encode(...), ...)
+          - pattern: hashlib.new($ALG, $PW, ...)
+      - metavariable-regex:
+          metavariable: $PW
+          regex: (?i).*(pass|pwd|secret).*
+
+  - id: py-weak-hash
+    languages: [python]
+    severity: INFO
+    message: MD5/SHA1 are broken for security purposes.
+    metadata: { class: weak_crypto, confidence: low }
+    patterns:
+      - pattern-either:
+          - pattern: hashlib.md5(...)
+          - pattern: hashlib.sha1(...)
+      - pattern-not: hashlib.md5(..., usedforsecurity=False)
+      - pattern-not: hashlib.sha1(..., usedforsecurity=False)
+
+  - id: py-plaintext-password-compare
+    languages: [python]
+    severity: WARNING
+    message: Password compared in plaintext; this implies plaintext storage.
+    metadata: { class: weak_credential_storage, confidence: medium }
+    patterns:
+      - pattern: $A.password == $B
+      - pattern-not-inside: check_password_hash(...)
+
+  - id: py-hardcoded-secret
+    languages: [python]
+    severity: ERROR
+    message: Hardcoded secret in source code.
+    metadata: { class: hardcoded_secret, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: $NAME = "$VALUE"
+          - pattern: $OBJ.config["$NAME"] = "$VALUE"
+          - pattern: $OBJ["$NAME"] = "$VALUE"
+          - pattern: $OBJ.$NAME = "$VALUE"
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(secret|passwd|password|api_?key|token|private_?key|access_?key|auth_?key|jwt_?key).*
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: ^(?!(changeme|change-me|xxx+|your[-_ ].*|<.*>|\$\{.*\}|\*+|test|example|dummy|none|null|)$).{6,}$
+
+  - id: py-jwt-no-verify
+    languages: [python]
+    severity: ERROR
+    message: JWT decoded without signature verification or with the 'none' algorithm.
+    metadata: { class: jwt_misuse, confidence: high }
+    pattern-either:
+      - pattern: jwt.decode(..., verify=False, ...)
+      - pattern: 'jwt.decode(..., options={..., "verify_signature": False, ...}, ...)'
+      - pattern: 'jwt.decode(..., algorithms=[..., "none", ...], ...)'
+      - pattern: 'jwt.encode(..., algorithm="none", ...)'
+
+  - id: py-insecure-random-token
+    languages: [python]
+    severity: WARNING
+    message: Security token generated with the non-cryptographic `random` module. Use `secrets`.
+    metadata: { class: insecure_random, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: $V = <... random.$F(...) ...>
+      - metavariable-regex:
+          metavariable: $V
+          regex: (?i).*(token|secret|password|passwd|otp|nonce|salt|reset|session|api_?key|code).*
+
+  - id: py-cors-wildcard-credentials
+    languages: [python]
+    severity: WARNING
+    message: CORS allows any origin together with credentials.
+    metadata: { class: cors_misconfig, confidence: high }
+    pattern-either:
+      - pattern: 'CORS(..., origins="*", ..., supports_credentials=True, ...)'
+      - pattern: 'CORS(..., supports_credentials=True, ..., origins="*", ...)'
+      - pattern: 'CORS(..., resources={..., $K: {..., "origins": "*", ...}, ...}, ..., supports_credentials=True, ...)'
+      - pattern: CORS_ALLOW_ALL_ORIGINS = True
+      - pattern: CORS_ORIGIN_ALLOW_ALL = True
+
+  - id: py-error-leakage
+    languages: [python]
+    severity: WARNING
+    message: Exception details / stack trace returned to the client.
+    metadata: { class: error_leakage, confidence: medium }
+    pattern-either:
+      - patterns:
+          - pattern-inside: |
+              try:
+                ...
+              except $EX as $E:
+                ...
+          - pattern-either:
+              - pattern: return str($E)
+              - pattern: return $F(..., str($E), ...)
+              - pattern: 'return {..., $K: str($E), ...}'
+              - pattern: return jsonify(..., error=str($E), ...)
+      - pattern: return traceback.format_exc()
+      - pattern: return $F(..., traceback.format_exc(), ...)
+
+  - id: py-sensitive-logging
+    languages: [python]
+    severity: WARNING
+    message: Sensitive value (password / token / secret) written to logs.
+    metadata: { class: sensitive_logging, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: logging.$M(...)
+          - pattern: $LOGGER.$M(...)
+          - pattern: print(...)
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(debug|info|warning|warn|error|critical|exception|log)$
+      - pattern-regex: (?i)(password|passwd|secret|api_?key|token|credit_?card|ssn)
+    paths:
+      exclude: ["*test*"]
+
+  - id: py-sensitive-print
+    languages: [python]
+    severity: INFO
+    message: Sensitive value printed to stdout.
+    metadata: { class: sensitive_logging, confidence: low }
+    patterns:
+      - pattern: print(...)
+      - pattern-regex: (?i)print\(.*\b(password|passwd|secret|api_?key|token)\b
+
+  - id: py-unrestricted-upload
+    languages: [python]
+    severity: WARNING
+    message: Uploaded file is saved without checking its type / extension.
+    metadata: { class: unrestricted_upload, confidence: medium }
+    patterns:
+      - pattern-inside: |
+          def $FN(...):
+            ...
+      - pattern-either:
+          - pattern: |
+              $F = request.files[...]
+              ...
+              $F.save(...)
+          - pattern: |
+              $F = request.files.get(...)
+              ...
+              $F.save(...)
+      - pattern-not-inside: |
+          def $FN(...):
+            ...
+            if <... allowed_file(...) ...>:
+              ...
+            ...
+      - pattern-not-inside: |
+          def $FN(...):
+            ...
+            if <... $X.mimetype ...>:
+              ...
+            ...
+      - pattern-not-inside: |
+          def $FN(...):
+            ...
+            if <... os.path.splitext(...) ...>:
+              ...
+            ...
+
+  - id: py-client-controlled-authz
+    languages: [python]
+    severity: WARNING
+    message: Authorization decision taken from a client-controlled value (parameter / header / cookie).
+    metadata: { class: client_controlled_authz, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: request.$A.get("$K", ...)
+          - pattern: request.$A["$K"]
+      - metavariable-regex:
+          metavariable: $K
+          regex: (?i)^(x-)?(role|roles|is_?admin|admin|user_?type|permission|permissions|privilege|group|access_?level)$
+
+  - id: py-data-exposure-dict
+    languages: [python]
+    severity: WARNING
+    message: A whole model object (including password/secret fields) is serialised into the response.
+    metadata: { class: sensitive_data_exposure, confidence: medium }
+    pattern-either:
+      - pattern: jsonify($X.__dict__)
+      - pattern: return $X.__dict__
+      - pattern: JsonResponse(model_to_dict($X), ...)
+      - patterns:
+          - pattern-inside: |
+              class $S(serializers.ModelSerializer):
+                ...
+          - pattern: fields = "__all__"
+
+  - id: py-cleartext-http
+    languages: [python]
+    severity: INFO
+    message: Credentials or tokens sent over plain HTTP.
+    metadata: { class: cleartext_transport, confidence: low }
+    patterns:
+      - pattern-either:
+          - pattern: requests.$M("$URL", ..., auth=$A, ...)
+          - pattern: 'requests.$M("$URL", ..., headers={..., "Authorization": $T, ...}, ...)'
+      - metavariable-regex:
+          metavariable: $URL
+          regex: ^http://(?!localhost|127\.0\.0\.1).*
+
+  - id: py-insecure-cookie
+    languages: [python]
+    severity: INFO
+    message: Session cookie configured without Secure / HttpOnly flags.
+    metadata: { class: security_misconfig, confidence: low }
+    pattern-either:
+      - pattern: $R.set_cookie(..., httponly=False, ...)
+      - pattern: $R.set_cookie(..., secure=False, ...)
+      - pattern: SESSION_COOKIE_SECURE = False
+      - pattern: SESSION_COOKIE_HTTPONLY = False

@@ -1,0 +1,336 @@
+# JavaScript / TypeScript / React configuration, crypto, access-control and leakage rules.
+rules:
+  - id: js-tls-reject-unauthorized
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: TLS certificate validation disabled (rejectUnauthorized false).
+    metadata: { class: tls_validation, confidence: high }
+    pattern: "{..., rejectUnauthorized: false, ...}"
+    fix-regex:
+      regex: rejectUnauthorized\s*:\s*false
+      replacement: "rejectUnauthorized: true"
+
+  - id: js-tls-env-disabled
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: NODE_TLS_REJECT_UNAUTHORIZED=0 disables TLS validation for the whole process.
+    metadata: { class: tls_validation, confidence: high }
+    pattern-either:
+      - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
+      - pattern: process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
+      - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
+
+  - id: js-weak-password-hash
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Password hashed with MD5/SHA1/SHA256 directly. Use bcrypt / argon2 / scrypt.
+    metadata: { class: weak_credential_storage, confidence: high }
+    patterns:
+      - pattern: crypto.createHash($ALG).update($PW, ...)
+      - metavariable-regex:
+          metavariable: $PW
+          regex: (?i).*(pass|pwd|secret).*
+
+  - id: js-bcrypt-low-rounds
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: bcrypt cost factor below 10.
+    metadata: { class: weak_credential_storage, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: bcrypt.hash($PW, $R, ...)
+          - pattern: bcrypt.hashSync($PW, $R)
+          - pattern: bcrypt.genSalt($R, ...)
+          - pattern: bcrypt.genSaltSync($R)
+      - metavariable-comparison:
+          metavariable: $R
+          comparison: $R < 10
+
+  - id: js-weak-hash
+    languages: [javascript, typescript]
+    severity: INFO
+    message: MD5/SHA1 are broken for security purposes.
+    metadata: { class: weak_crypto, confidence: low }
+    patterns:
+      - pattern: crypto.createHash("$ALG")
+      - metavariable-regex:
+          metavariable: $ALG
+          regex: (?i)^(md5|sha1|md4)$
+
+  - id: js-weak-cipher
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Weak or deprecated cipher / ECB mode.
+    metadata: { class: weak_crypto, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: crypto.createCipher(...)
+          - pattern: crypto.createCipheriv("$ALG", ...)
+      - metavariable-regex:
+          metavariable: $ALG
+          regex: (?i).*(des|rc4|ecb|rc2|blowfish).*
+
+  - id: js-hardcoded-secret
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Hardcoded secret in source code.
+    metadata: { class: hardcoded_secret, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: const $NAME = "$VALUE"
+          - pattern: let $NAME = "$VALUE"
+          - pattern: var $NAME = "$VALUE"
+          - pattern: '{..., $NAME: "$VALUE", ...}'
+          - pattern: $OBJ.$NAME = "$VALUE"
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(secret|passwd|password|api_?key|token|private_?key|access_?key|auth_?key|jwt_?key).*
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: ^(?!(changeme|change-me|xxx+|your[-_ ].*|<.*>|\$\{.*\}|\*+|test|example|dummy|none|null|password|text|hidden)$).{6,}$
+
+  - id: js-jwt-hardcoded-secret
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: JWT signed/verified with a hardcoded secret.
+    metadata: { class: hardcoded_secret, confidence: high }
+    pattern-either:
+      - pattern: jwt.sign($P, "...", ...)
+      - pattern: jwt.verify($T, "...", ...)
+      - pattern: 'session({..., secret: "...", ...})'
+      - pattern: 'expressJwt({..., secret: "...", ...})'
+
+  - id: js-mongo-credentials-in-uri
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: Database credentials embedded in a connection string.
+    metadata: { class: hardcoded_secret, confidence: high }
+    patterns:
+      - pattern-either:
+          - pattern: mongoose.connect("$URI", ...)
+          - pattern: new MongoClient("$URI", ...)
+          - pattern: MongoClient.connect("$URI", ...)
+          - pattern: new Sequelize("$URI", ...)
+      - metavariable-regex:
+          metavariable: $URI
+          regex: ^[a-z+]+://[^:/@]+:[^@/]+@.*
+
+  - id: js-jwt-none-or-decode
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: JWT accepted without proper signature verification ('none' algorithm or jwt.decode used for auth).
+    metadata: { class: jwt_misuse, confidence: medium }
+    pattern-either:
+      - pattern: 'jwt.verify($T, $K, {..., algorithms: [..., "none", ...], ...}, ...)'
+      - pattern: 'jwt.sign($P, $K, {..., algorithm: "none", ...}, ...)'
+      - patterns:
+          - pattern: jwt.decode(...)
+          - pattern-inside: |
+              function $F($REQ, $RES, $NEXT) { ... }
+
+  - id: js-insecure-random-token
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Security token generated with Math.random(). Use crypto.randomBytes / crypto.randomUUID.
+    metadata: { class: insecure_random, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: const $V = <... Math.random() ...>
+          - pattern: let $V = <... Math.random() ...>
+          - pattern: var $V = <... Math.random() ...>
+          - pattern: $O.$V = <... Math.random() ...>
+      - metavariable-regex:
+          metavariable: $V
+          regex: (?i).*(token|secret|password|passwd|otp|nonce|salt|reset|session|apikey|api_key|code).*
+
+  - id: js-cors-wildcard-credentials
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: CORS reflects any origin together with credentials.
+    metadata: { class: cors_misconfig, confidence: high }
+    pattern-either:
+      - pattern: 'cors({..., origin: "*", ..., credentials: true, ...})'
+      - pattern: 'cors({..., credentials: true, ..., origin: "*", ...})'
+      - pattern: 'cors({..., origin: true, ..., credentials: true, ...})'
+      - pattern: 'cors({..., credentials: true, ..., origin: true, ...})'
+      - pattern: $RES.header("Access-Control-Allow-Origin", req.headers.origin)
+      - pattern: $RES.setHeader("Access-Control-Allow-Origin", req.headers.origin)
+      - pattern: $RES.set("Access-Control-Allow-Origin", req.headers.origin)
+
+  - id: js-error-leakage
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Error object / stack trace sent to the client.
+    metadata: { class: error_leakage, confidence: medium }
+    pattern-either:
+      - pattern: $RES.send($E.stack)
+      - pattern: $RES.status($C).send($E.stack)
+      - pattern: '$RES.json({..., $K: $E.stack, ...})'
+      - pattern: '$RES.status($C).json({..., $K: $E.stack, ...})'
+      - patterns:
+          - pattern-inside: |
+              try { ... } catch ($E) { ... }
+          - pattern-either:
+              - pattern: $RES.send($E)
+              - pattern: $RES.status($C).send($E)
+              - pattern: $RES.json($E)
+              - pattern: $RES.status($C).json($E)
+      - patterns:
+          - pattern-inside: |
+              $P.catch(($E) => { ... })
+          - pattern-either:
+              - pattern: $RES.send($E)
+              - pattern: $RES.status($C).send($E)
+              - pattern: $RES.json($E)
+              - pattern: $RES.status($C).json($E)
+      - patterns:
+          - pattern-inside: |
+              function ($ERR, $REQ, $RES, $NEXT) { ... }
+          - pattern-either:
+              - pattern: $RES.send($ERR.stack)
+              - pattern: $RES.status($C).send($ERR)
+              - pattern: $RES.json($ERR)
+
+  - id: js-sensitive-logging
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Sensitive value (password / token / secret) written to logs.
+    metadata: { class: sensitive_logging, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: console.$M(...)
+          - pattern: logger.$M(...)
+          - pattern: winston.$M(...)
+      - pattern-regex: (?i)(console|logger|winston)\.\w+\(.*\b(password|passwd|secret|apiKey|api_key|token|creditCard)\b
+
+  - id: js-multer-no-filter
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: multer upload without fileFilter / limits (unrestricted file upload).
+    metadata: { class: unrestricted_upload, confidence: medium }
+    patterns:
+      - pattern: multer({...})
+      - pattern-not: 'multer({..., fileFilter: $F, ...})'
+
+  - id: js-mass-assignment
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: The whole request body is bound to a model; attackers can set role / isAdmin / owner fields.
+    metadata: { class: mass_assignment, confidence: medium }
+    pattern-either:
+      - pattern: new $MODEL(req.body)
+      - pattern: new $MODEL({...req.body})
+      - pattern: new $MODEL({..., ...req.body, ...})
+      - pattern: $MODEL.create(req.body, ...)
+      - pattern: $MODEL.insertMany(req.body, ...)
+      - pattern: Object.assign($X, req.body)
+      - pattern: $MODEL.findByIdAndUpdate($ID, req.body, ...)
+      - pattern: $MODEL.findOneAndUpdate($Q, req.body, ...)
+      - pattern: $MODEL.updateOne($Q, req.body, ...)
+      - pattern: $MODEL.update($Q, req.body, ...)
+      - pattern: '$MODEL.findByIdAndUpdate($ID, {$set: req.body}, ...)'
+      - pattern: $X.set(req.body)
+
+  - id: js-client-controlled-authz
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Authorization decision based on a client-controlled value (header / query / body / cookie).
+    metadata: { class: client_controlled_authz, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: req.$A.$K
+          - pattern: req.$A["$K"]
+      - metavariable-regex:
+          metavariable: $A
+          regex: ^(headers|query|body|cookies|params)$
+      - metavariable-regex:
+          metavariable: $K
+          regex: (?i)^(x-)?(role|roles|isadmin|is_admin|admin|usertype|user_type|permission|permissions|privilege|accesslevel|access_level)$
+      - pattern-inside: if (<... $X ...>) { ... }
+
+  - id: js-react-dangerous-html
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: dangerouslySetInnerHTML with non-constant content (XSS). Sanitise with DOMPurify.
+    metadata: { class: xss, confidence: medium }
+    patterns:
+      - pattern: "<$EL dangerouslySetInnerHTML={{__html: $X}} />"
+      - pattern-not: "<$EL dangerouslySetInnerHTML={{__html: \"...\"}} />"
+      - pattern-not: "<$EL dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(...)}} />"
+
+  - id: js-react-javascript-href
+    languages: [javascript, typescript]
+    severity: INFO
+    message: "User-controlled href may allow javascript: URLs."
+    metadata: { class: xss, confidence: low }
+    patterns:
+      - pattern: <a href={$X} />
+      - metavariable-regex:
+          metavariable: $X
+          regex: (?i).*(url|link|href|website|redirect).*
+
+  - id: js-client-side-secret
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: A secret is exposed to the browser bundle through a public env variable.
+    metadata: { class: client_side_secret, confidence: high }
+    patterns:
+      - pattern-either:
+          - pattern: process.env.$VAR
+          - pattern: import.meta.env.$VAR
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: ^(REACT_APP_|VITE_|NEXT_PUBLIC_).*(SECRET|PRIVATE|PASSWORD|TOKEN|API_KEY|APIKEY).*
+
+  - id: js-token-in-localstorage
+    languages: [javascript, typescript]
+    severity: INFO
+    message: Auth token stored in localStorage (readable by any XSS). Prefer httpOnly cookies.
+    metadata: { class: security_misconfig, confidence: low }
+    patterns:
+      - pattern: localStorage.setItem("$K", $V)
+      - metavariable-regex:
+          metavariable: $K
+          regex: (?i).*(token|jwt|auth|session).*
+
+  - id: js-insecure-cookie
+    languages: [javascript, typescript]
+    severity: INFO
+    message: Cookie set without httpOnly / secure flags.
+    metadata: { class: security_misconfig, confidence: low }
+    pattern-either:
+      - pattern: '$RES.cookie($N, $V, {..., httpOnly: false, ...})'
+      - pattern: '$RES.cookie($N, $V, {..., secure: false, ...})'
+      - pattern: '{..., cookie: {..., secure: false, ...}, ...}'
+
+  - id: js-nosql-where
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: MongoDB $where executes JavaScript; never build it from user input.
+    metadata: { class: nosqli, confidence: medium }
+    pattern-either:
+      - pattern: '$M.find({..., $where: $X, ...})'
+      - pattern: '$M.$where($X)'
+      - pattern: $M.where($X)
+
+  - id: js-unsafe-recursive-merge
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: Recursive merge without a __proto__/constructor guard (prototype pollution).
+    metadata: { class: prototype_pollution, confidence: medium }
+    patterns:
+      - pattern-inside: |
+          function $MERGE($T, $S) { ... }
+      - pattern-either:
+          - pattern: |
+              for (const $K in $S) { ... $T[$K] = $MERGE($T[$K], $S[$K]); ... }
+          - pattern: |
+              for (let $K in $S) { ... $T[$K] = $MERGE($T[$K], $S[$K]); ... }
+          - pattern: |
+              for (var $K in $S) { ... $T[$K] = $MERGE($T[$K], $S[$K]); ... }
+          - pattern: |
+              for (const $K in $S) { ... $MERGE($T[$K], $S[$K]); ... }
+          - pattern: |
+              for (let $K in $S) { ... $MERGE($T[$K], $S[$K]); ... }
+      - pattern-not-inside: |
+          function $MERGE($T, $S) { ... if (<... "__proto__" ...>) { ... } ... }

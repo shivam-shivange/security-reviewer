@@ -1,0 +1,354 @@
+# Vulnerability / issue classes known to the scanner.
+# attack_tier: A = the attack itself has a direct code-level cause; B = the code flaw is an
+# enabling weakness for the attack (see "Project Deep Analysis" section 8.2).
+# verifiable: an exploit oracle exists in harness/oracles.yaml, so the Verify stage can prove a fix.
+
+sqli:
+  title: SQL Injection
+  cwe: [CWE-89]
+  category: injection
+  severity: critical
+  attack: SQL Injection (data theft, auth bypass)
+  attack_tier: A
+  verifiable: true
+  remediation: Use parameterised queries / prepared statements; never build SQL with string concatenation or formatting.
+
+nosqli:
+  title: NoSQL Injection
+  cwe: [CWE-943]
+  category: injection
+  severity: critical
+  attack: NoSQL Injection (MongoDB operator injection, auth bypass)
+  attack_tier: A
+  verifiable: true
+  remediation: Cast untrusted values to the expected primitive type (String(), Number()) or use $eq; reject objects in query values; never use $where with user input; enable mongoose sanitizeFilter.
+
+xss:
+  title: Cross-Site Scripting
+  cwe: [CWE-79]
+  category: injection
+  severity: high
+  attack: Cross-Site Scripting (session theft, defacement)
+  attack_tier: A
+  verifiable: true
+  remediation: HTML-escape untrusted data before output; use auto-escaping templates; avoid dangerouslySetInnerHTML / innerHTML or sanitise with DOMPurify.
+
+cmdi:
+  title: Command Injection
+  cwe: [CWE-78, CWE-77]
+  category: injection
+  severity: critical
+  attack: Remote code execution, malware delivery
+  attack_tier: B
+  verifiable: true
+  remediation: Do not invoke a shell; pass arguments as a list (subprocess.run([...]), execFile, ProcessBuilder) and validate inputs against an allowlist.
+
+code_injection:
+  title: Code Injection
+  cwe: [CWE-94, CWE-95]
+  category: injection
+  severity: critical
+  attack: Remote code execution
+  attack_tier: B
+  verifiable: true
+  remediation: Never eval/exec untrusted input; use ast.literal_eval / JSON.parse or an explicit dispatcher.
+
+path_traversal:
+  title: Path Traversal
+  cwe: [CWE-22]
+  category: injection
+  severity: high
+  attack: Data exfiltration (arbitrary file read/write)
+  attack_tier: B
+  verifiable: true
+  remediation: Canonicalise the path (realpath / normalize / getCanonicalPath) and check it stays inside the allowed base directory.
+
+ssrf:
+  title: Server-Side Request Forgery
+  cwe: [CWE-918]
+  category: injection
+  severity: high
+  attack: Internal network access, cloud metadata theft
+  attack_tier: B
+  verifiable: true
+  remediation: Validate outbound URLs against an allowlist of schemes and hosts; block private, loopback and link-local addresses after DNS resolution.
+
+open_redirect:
+  title: Open Redirect
+  cwe: [CWE-601]
+  category: injection
+  severity: medium
+  attack: Phishing via trusted-domain redirects
+  attack_tier: B
+  verifiable: true
+  remediation: Only redirect to relative paths or an allowlist of hosts.
+
+xxe:
+  title: XML External Entity (XXE)
+  cwe: [CWE-611]
+  category: injection
+  severity: high
+  attack: File disclosure, SSRF through XML parsers
+  attack_tier: B
+  verifiable: true
+  remediation: Disable DOCTYPE declarations and external entities on the XML parser (disallow-doctype-decl); use defusedxml in Python.
+
+deserialization:
+  title: Insecure Deserialization
+  cwe: [CWE-502]
+  category: injection
+  severity: critical
+  attack: Remote code execution via gadget chains
+  attack_tier: B
+  verifiable: false
+  remediation: Never deserialise untrusted data with native serializers (ObjectInputStream, pickle, yaml.load, node-serialize); use JSON with schema validation, or an ObjectInputFilter allowlist.
+
+prototype_pollution:
+  title: Prototype Pollution
+  cwe: [CWE-1321]
+  category: injection
+  severity: high
+  attack: Privilege escalation, denial of service, RCE via polluted prototypes
+  attack_tier: B
+  verifiable: true
+  remediation: Reject the keys __proto__, constructor and prototype in merges and dynamic assignments; use Object.create(null) or Map; use safe merge libraries.
+
+tls_validation:
+  title: Disabled TLS Certificate Validation
+  cwe: [CWE-295]
+  category: configuration
+  severity: high
+  attack: Man-in-the-Middle, eavesdropping
+  attack_tier: B
+  verifiable: false
+  remediation: Keep certificate verification enabled (verify=True, rejectUnauthorized=true, default TrustManager/HostnameVerifier).
+
+cleartext_transport:
+  title: Cleartext Transport of Sensitive Data
+  cwe: [CWE-319]
+  category: configuration
+  severity: medium
+  attack: Eavesdropping
+  attack_tier: B
+  verifiable: false
+  remediation: Use HTTPS/TLS for all endpoints that carry credentials or personal data; set secure cookie flags.
+
+rate_limiting:
+  title: Missing Rate Limiting / Lockout
+  cwe: [CWE-307, CWE-770]
+  category: configuration
+  severity: medium
+  attack: Password attacks, credential stuffing, application-layer DDoS
+  attack_tier: B
+  verifiable: false
+  remediation: Add rate limiting or account lockout to authentication and expensive endpoints (express-rate-limit, Flask-Limiter, bucket4j / Spring Security).
+
+weak_credential_storage:
+  title: Weak Credential Storage
+  cwe: [CWE-256, CWE-916, CWE-328]
+  category: crypto
+  severity: high
+  attack: Password attacks (offline cracking after a breach)
+  attack_tier: B
+  verifiable: false
+  remediation: Hash passwords with bcrypt, scrypt or Argon2 (werkzeug generate_password_hash, bcrypt, BCryptPasswordEncoder); never MD5/SHA1/plaintext.
+
+hardcoded_secret:
+  title: Hardcoded Secret / Credential
+  cwe: [CWE-798, CWE-321]
+  category: crypto
+  severity: high
+  attack: Password attacks, account takeover, API abuse
+  attack_tier: B
+  verifiable: false
+  remediation: Load secrets from environment variables or a secret manager; rotate any secret that was committed.
+
+weak_crypto:
+  title: Weak Cryptography
+  cwe: [CWE-327, CWE-326]
+  category: crypto
+  severity: medium
+  attack: Data decryption, signature forgery
+  attack_tier: B
+  verifiable: false
+  remediation: Use modern algorithms (AES-GCM, SHA-256+, RSA >= 2048) and authenticated encryption; avoid DES, RC4, ECB mode, MD5, SHA1.
+
+insecure_random:
+  title: Insecure Randomness
+  cwe: [CWE-330, CWE-338]
+  category: crypto
+  severity: medium
+  attack: Token / password-reset prediction
+  attack_tier: B
+  verifiable: false
+  remediation: Use a CSPRNG for tokens and secrets (secrets module, crypto.randomBytes, SecureRandom).
+
+jwt_misuse:
+  title: JWT Misuse
+  cwe: [CWE-347]
+  category: crypto
+  severity: high
+  attack: Authentication bypass via forged tokens
+  attack_tier: B
+  verifiable: false
+  remediation: Always verify signatures, pin the allowed algorithms (never 'none'), use strong secrets and set expiry.
+
+unrestricted_upload:
+  title: Unrestricted File Upload
+  cwe: [CWE-434]
+  category: configuration
+  severity: high
+  attack: Drive-by downloads, malware hosting, web-shell upload
+  attack_tier: B
+  verifiable: false
+  remediation: Validate file type (extension allowlist + content sniffing), limit size, rename files, store outside the web root.
+
+cors_misconfig:
+  title: CORS Misconfiguration
+  cwe: [CWE-942]
+  category: configuration
+  severity: medium
+  attack: Cross-origin data theft
+  attack_tier: B
+  verifiable: false
+  remediation: Do not combine wildcard or reflected origins with credentials; allowlist trusted origins.
+
+debug_enabled:
+  title: Debug Mode / Dev Features Enabled
+  cwe: [CWE-489, CWE-215]
+  category: configuration
+  severity: medium
+  attack: Remote code execution (debug consoles), information disclosure
+  attack_tier: B
+  verifiable: false
+  remediation: Disable debug mode and developer endpoints in production configuration.
+
+security_misconfig:
+  title: Security Misconfiguration
+  cwe: [CWE-16, CWE-1021]
+  category: configuration
+  severity: low
+  attack: Clickjacking, information disclosure
+  attack_tier: B
+  verifiable: false
+  remediation: Enable standard security headers (helmet, Spring Security defaults), disable verbose server banners.
+
+open_endpoint:
+  title: Unauthenticated Sensitive Endpoint
+  cwe: [CWE-306]
+  category: access_control
+  severity: high
+  attack: Unauthorised data access or modification
+  attack_tier: B
+  verifiable: false
+  remediation: Require authentication on every non-public route (auth middleware, @login_required, Spring Security .authenticated()).
+
+missing_role_check:
+  title: Missing Role / Permission Check (RBAC)
+  cwe: [CWE-862, CWE-285]
+  category: access_control
+  severity: high
+  attack: Privilege escalation
+  attack_tier: B
+  verifiable: false
+  remediation: Enforce role checks server-side on privileged routes (requireRole middleware, @PreAuthorize, permission_required).
+
+inconsistent_authz:
+  title: Inconsistent Authorization Between Related Routes
+  cwe: [CWE-285, CWE-863]
+  category: access_control
+  severity: high
+  attack: Privilege escalation through the unprotected sibling route
+  attack_tier: B
+  verifiable: false
+  remediation: Apply the same authentication / role requirements to every method on a resource.
+
+idor:
+  title: Insecure Direct Object Reference (IDOR / BOLA)
+  cwe: [CWE-639]
+  category: access_control
+  severity: high
+  attack: Horizontal privilege escalation (reading or changing other users' data)
+  attack_tier: B
+  verifiable: false
+  remediation: Scope every object lookup to the current user or check ownership/permission after loading.
+
+mass_assignment:
+  title: Mass Assignment
+  cwe: [CWE-915]
+  category: access_control
+  severity: high
+  attack: Privilege escalation (setting role/isAdmin from the request)
+  attack_tier: B
+  verifiable: false
+  remediation: Allowlist the fields copied from the request body (DTOs, pick(), explicit field assignment).
+
+client_controlled_authz:
+  title: Authorization Decision Based on Client Input
+  cwe: [CWE-807, CWE-639]
+  category: access_control
+  severity: high
+  attack: Privilege escalation by editing a header, cookie or parameter
+  attack_tier: B
+  verifiable: false
+  remediation: Derive roles and identity from the verified session/token on the server, never from request fields.
+
+sensitive_data_exposure:
+  title: Sensitive Data Exposure in API Response
+  cwe: [CWE-200, CWE-359]
+  category: data_leakage
+  severity: high
+  attack: API data leakage (password hashes, tokens, personal data)
+  attack_tier: B
+  verifiable: false
+  remediation: Return DTOs / explicit field selections; exclude password, token and secret fields (select('-password'), @JsonIgnore, serializer fields).
+
+error_leakage:
+  title: Stack Trace / Error Detail Leakage
+  cwe: [CWE-209]
+  category: data_leakage
+  severity: medium
+  attack: Information disclosure that aids further attacks
+  attack_tier: B
+  verifiable: false
+  remediation: Return generic error messages to clients and log details server-side.
+
+sensitive_logging:
+  title: Sensitive Data in Logs
+  cwe: [CWE-532]
+  category: data_leakage
+  severity: medium
+  attack: Credential leakage through log files
+  attack_tier: B
+  verifiable: false
+  remediation: Never log passwords, tokens or secrets; mask sensitive fields.
+
+client_side_secret:
+  title: Secret Exposed to the Browser Bundle
+  cwe: [CWE-200, CWE-798]
+  category: data_leakage
+  severity: high
+  attack: API key theft from the frontend bundle
+  attack_tier: B
+  verifiable: false
+  remediation: Keep secrets on the server; only expose public identifiers through REACT_APP_/VITE_/NEXT_PUBLIC_ variables.
+
+vulnerable_dependency:
+  title: Vulnerable / Malicious Dependency
+  cwe: [CWE-1395, CWE-1104]
+  category: dependency
+  severity: high
+  attack: Supply chain attacks
+  attack_tier: B
+  verifiable: true
+  remediation: Upgrade to the fixed version reported by the advisory; pin and audit dependencies.
+
+general_bug:
+  title: General Code Bug
+  cwe: []
+  category: general_bug
+  severity: low
+  attack: ""
+  attack_tier: ""
+  verifiable: false
+  remediation: See the linter rule documentation and the recommended patch.

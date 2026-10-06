@@ -1,0 +1,382 @@
+# Java configuration, crypto, XML, deserialization, access-control and leakage rules.
+rules:
+  - id: java-xxe-documentbuilder
+    languages: [java]
+    severity: ERROR
+    message: DocumentBuilderFactory without disallow-doctype-decl allows XXE.
+    metadata: { class: xxe, confidence: high }
+    patterns:
+      - pattern: $DBF = DocumentBuilderFactory.newInstance();
+      - pattern-not-inside: |
+          $DBF = DocumentBuilderFactory.newInstance();
+          ...
+          $DBF.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+      - pattern-not-inside: |
+          $DBF = DocumentBuilderFactory.newInstance();
+          ...
+          $DBF.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+          ...
+          $DBF.setExpandEntityReferences(false);
+
+  - id: java-xxe-saxparser
+    languages: [java]
+    severity: ERROR
+    message: SAXParserFactory without disallow-doctype-decl allows XXE.
+    metadata: { class: xxe, confidence: high }
+    patterns:
+      - pattern: $SPF = SAXParserFactory.newInstance();
+      - pattern-not-inside: |
+          $SPF = SAXParserFactory.newInstance();
+          ...
+          $SPF.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+
+  - id: java-xxe-xmlinputfactory
+    languages: [java]
+    severity: ERROR
+    message: XMLInputFactory supports external entities unless disabled.
+    metadata: { class: xxe, confidence: high }
+    patterns:
+      - pattern: $XIF = XMLInputFactory.newInstance();
+      - pattern-not-inside: |
+          $XIF = XMLInputFactory.newInstance();
+          ...
+          $XIF.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+      - pattern-not-inside: |
+          $XIF = XMLInputFactory.newInstance();
+          ...
+          $XIF.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+
+  - id: java-xxe-transformer
+    languages: [java]
+    severity: WARNING
+    message: TransformerFactory without ACCESS_EXTERNAL_DTD / ACCESS_EXTERNAL_STYLESHEET restrictions.
+    metadata: { class: xxe, confidence: medium }
+    patterns:
+      - pattern: $TF = TransformerFactory.newInstance();
+      - pattern-not-inside: |
+          $TF = TransformerFactory.newInstance();
+          ...
+          $TF.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+
+  - id: java-object-input-stream
+    languages: [java]
+    severity: ERROR
+    message: ObjectInputStream.readObject without an ObjectInputFilter (insecure deserialization).
+    metadata: { class: deserialization, confidence: medium }
+    patterns:
+      - pattern: $OIS.readObject()
+      - pattern-inside: |
+          $T $OIS = new ObjectInputStream(...);
+          ...
+      - pattern-not-inside: |
+          $T $OIS = new ObjectInputStream(...);
+          ...
+          $OIS.setObjectInputFilter(...);
+          ...
+
+  - id: java-unsafe-deserializers
+    languages: [java]
+    severity: ERROR
+    message: Unsafe deserialiser configuration (polymorphic typing / XMLDecoder / XStream / SnakeYAML).
+    metadata: { class: deserialization, confidence: medium }
+    pattern-either:
+      - pattern: (ObjectMapper $M).enableDefaultTyping(...)
+      - pattern: $M.activateDefaultTyping(...)
+      - pattern: '@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, ...)'
+      - pattern: '@JsonTypeInfo(use = Id.CLASS, ...)'
+      - pattern: new XMLDecoder(...)
+      - pattern: new XStream()
+      - pattern: new Yaml().load(...)
+
+  - id: java-trust-all-certs
+    languages: [java]
+    severity: ERROR
+    message: TrustManager that accepts every certificate (TLS validation disabled).
+    metadata: { class: tls_validation, confidence: high }
+    patterns:
+      - pattern: |
+          public void checkServerTrusted(...) { }
+      - pattern-inside: |
+          class $C implements X509TrustManager { ... }
+
+  - id: java-trust-all-anon
+    languages: [java]
+    severity: ERROR
+    message: Anonymous TrustManager with an empty checkServerTrusted (TLS validation disabled).
+    metadata: { class: tls_validation, confidence: high }
+    pattern: |
+      new X509TrustManager() {
+        ...
+        public void checkServerTrusted(...) {}
+        ...
+      }
+
+  - id: java-hostname-verifier
+    languages: [java]
+    severity: ERROR
+    message: Hostname verification disabled.
+    metadata: { class: tls_validation, confidence: high }
+    pattern-either:
+      - pattern: NoopHostnameVerifier.INSTANCE
+      - pattern: new NoopHostnameVerifier()
+      - pattern: SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER
+      - pattern: |
+          ($S, $SESSION) -> true
+      - pattern: |
+          new HostnameVerifier() {
+            ...
+            public boolean verify(...) { return true; }
+            ...
+          }
+
+  - id: java-weak-ssl-context
+    languages: [java]
+    severity: WARNING
+    message: Outdated SSL/TLS protocol requested.
+    metadata: { class: tls_validation, confidence: medium }
+    patterns:
+      - pattern: SSLContext.getInstance("$P")
+      - metavariable-regex:
+          metavariable: $P
+          regex: ^(SSL|SSLv2|SSLv3|TLSv1|TLSv1\.1)$
+
+  - id: java-weak-password-encoder
+    languages: [java]
+    severity: ERROR
+    message: Weak or no-op password encoder. Use BCryptPasswordEncoder / Argon2PasswordEncoder.
+    metadata: { class: weak_credential_storage, confidence: high }
+    pattern-either:
+      - pattern: NoOpPasswordEncoder.getInstance()
+      - pattern: new Md5PasswordEncoder()
+      - pattern: new ShaPasswordEncoder(...)
+      - pattern: new StandardPasswordEncoder(...)
+      - pattern: new MessageDigestPasswordEncoder(...)
+      - pattern: new LdapShaPasswordEncoder(...)
+
+  - id: java-weak-password-hash
+    languages: [java]
+    severity: ERROR
+    message: Password hashed with a fast unsalted digest.
+    metadata: { class: weak_credential_storage, confidence: high }
+    patterns:
+      - pattern: $MD.digest($PW.getBytes(...))
+      - metavariable-regex:
+          metavariable: $PW
+          regex: (?i).*(pass|pwd|secret).*
+
+  - id: java-weak-digest
+    languages: [java]
+    severity: INFO
+    message: MD5/SHA-1 are broken for security purposes.
+    metadata: { class: weak_crypto, confidence: low }
+    patterns:
+      - pattern: MessageDigest.getInstance("$ALG")
+      - metavariable-regex:
+          metavariable: $ALG
+          regex: (?i)^(md5|md2|md4|sha-?1|sha)$
+
+  - id: java-weak-cipher
+    languages: [java]
+    severity: WARNING
+    message: Weak cipher or ECB mode.
+    metadata: { class: weak_crypto, confidence: medium }
+    patterns:
+      - pattern: Cipher.getInstance("$ALG")
+      - metavariable-regex:
+          metavariable: $ALG
+          regex: (?i)^(des|desede|rc2|rc4|blowfish|aes|aes/ecb/.*|des/.*|.*/ecb/.*)$
+
+  - id: java-insecure-random
+    languages: [java]
+    severity: WARNING
+    message: java.util.Random / Math.random used for a security token. Use SecureRandom.
+    metadata: { class: insecure_random, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: new Random()
+          - pattern: new java.util.Random()
+          - pattern: Math.random()
+          - pattern: RandomStringUtils.randomAlphanumeric(...)
+      - pattern-inside: |
+          $RET $METHOD(...) { ... }
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: (?i).*(token|secret|password|otp|nonce|salt|reset|session|apikey|code|key).*
+
+  - id: java-hardcoded-secret
+    languages: [java]
+    severity: ERROR
+    message: Hardcoded secret in source code.
+    metadata: { class: hardcoded_secret, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: $TYPE $NAME = "$VALUE";
+          - pattern: $NAME = "$VALUE";
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(secret|passwd|password|api_?key|token|private_?key|access_?key|jwt_?key|signing_?key).*
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: ^(?!(changeme|change-me|xxx+|your[-_ ].*|<.*>|\$\{.*\}|\*+|test|example|dummy|none|null|password)$).{6,}$
+
+  - id: java-hardcoded-db-password
+    languages: [java]
+    severity: ERROR
+    message: Database password hardcoded in getConnection().
+    metadata: { class: hardcoded_secret, confidence: high }
+    pattern: DriverManager.getConnection($URL, $USER, "...")
+
+  - id: java-jwt-hardcoded-key
+    languages: [java]
+    severity: ERROR
+    message: JWT signing key hardcoded.
+    metadata: { class: hardcoded_secret, confidence: high }
+    pattern-either:
+      - pattern: Algorithm.HMAC256("...")
+      - pattern: Algorithm.HMAC512("...")
+      - pattern: Keys.hmacShaKeyFor("...".getBytes(...))
+      - pattern: $B.signWith($ALG, "...")
+      - pattern: $B.setSigningKey("...")
+
+  - id: java-jwt-unsigned-parse
+    languages: [java]
+    severity: ERROR
+    message: JWT parsed without signature validation (parse/parseClaimsJwt or JWT.decode).
+    metadata: { class: jwt_misuse, confidence: medium }
+    pattern-either:
+      - pattern: Jwts.parser().$X(...).parse(...)
+      - pattern: Jwts.parser().$X(...).parseClaimsJwt(...)
+      - pattern: Jwts.parser().parseClaimsJwt(...)
+      - pattern: Jwts.parserBuilder().build().parseClaimsJwt(...)
+      - pattern: JWT.decode(...)
+
+  - id: java-cors-wildcard-credentials
+    languages: [java]
+    severity: WARNING
+    message: CORS allows any origin together with credentials.
+    metadata: { class: cors_misconfig, confidence: high }
+    pattern-either:
+      - pattern: '@CrossOrigin(origins = "*", allowCredentials = "true")'
+      - pattern: '@CrossOrigin(allowCredentials = "true", origins = "*")'
+      - patterns:
+          - pattern: $C.setAllowCredentials(true);
+          - pattern-inside: |
+              $C.addAllowedOrigin("*");
+              ...
+      - pattern: $R.allowedOrigins("*").allowCredentials(true)
+      - pattern: $R.allowedOrigins("*").$M(...).allowCredentials(true)
+      - pattern: $R.allowedOriginPatterns("*").allowCredentials(true)
+
+  - id: java-csrf-disabled
+    languages: [java]
+    severity: INFO
+    message: CSRF protection disabled (fine only for stateless token APIs without cookies).
+    metadata: { class: security_misconfig, confidence: low }
+    pattern-either:
+      - pattern: $H.csrf().disable()
+      - pattern: $H.csrf(AbstractHttpConfigurer::disable)
+      - pattern: $H.csrf($C -> $C.disable())
+
+  - id: java-error-leakage
+    languages: [java]
+    severity: WARNING
+    message: Exception details / stack trace returned to the client.
+    metadata: { class: error_leakage, confidence: medium }
+    pattern-either:
+      - pattern: $E.printStackTrace((HttpServletResponse $R).getWriter())
+      - pattern: $E.printStackTrace($RESP.getWriter())
+      - pattern: (HttpServletResponse $R).getWriter().print($E.getStackTrace())
+      - pattern: ResponseEntity.$S(...).body($E.getStackTrace())
+      - pattern: ResponseEntity.$S(...).body(ExceptionUtils.getStackTrace($E))
+      - pattern: return ExceptionUtils.getStackTrace($E);
+      - patterns:
+          - pattern-inside: |
+              catch ($T $E) { ... }
+          - pattern-either:
+              - pattern: return $E.toString();
+              - pattern: return ResponseEntity.$S(...).body($E.toString());
+              - pattern: return ResponseEntity.$S(...).body($E);
+
+  - id: java-sensitive-logging
+    languages: [java]
+    severity: WARNING
+    message: Sensitive value (password / token / secret) written to logs.
+    metadata: { class: sensitive_logging, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: $LOG.$M(...)
+          - pattern: System.out.println(...)
+      - pattern-regex: (?i)(log(ger)?|System\.out)\.\w+\(.*\b(password|passwd|secret|apiKey|api_key|token|creditCard)\b
+
+  - id: java-unrestricted-upload
+    languages: [java]
+    severity: WARNING
+    message: Uploaded file stored without validating its type / extension.
+    metadata: { class: unrestricted_upload, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: (MultipartFile $F).transferTo(...)
+          - pattern: Files.copy((MultipartFile $F).getInputStream(), ...)
+          - pattern: Files.write($P, (MultipartFile $F).getBytes(), ...)
+      - pattern-inside: |
+          $RET $M(...) { ... }
+      - pattern-not-inside: |
+          $RET $M(...) {
+            ...
+            if (<... $F.getContentType() ...>) { ... }
+            ...
+          }
+      - pattern-not-inside: |
+          $RET $M(...) {
+            ...
+            if (<... FilenameUtils.getExtension(...) ...>) { ... }
+            ...
+          }
+      - pattern-not-inside: |
+          $RET $M(...) {
+            ...
+            if (<... $X.endsWith(...) ...>) { ... }
+            ...
+          }
+
+  - id: java-mass-assignment
+    languages: [java]
+    severity: WARNING
+    message: A request body is bound straight to a persisted entity (mass assignment); use a DTO with allowlisted fields.
+    metadata: { class: mass_assignment, confidence: low }
+    patterns:
+      - pattern-inside: |
+          $RET $M(..., @RequestBody $T $BODY, ...) { ... }
+      - pattern: $REPO.save($BODY)
+
+  - id: java-client-controlled-authz
+    languages: [java]
+    severity: WARNING
+    message: Authorization decision based on a client-controlled header / parameter / cookie.
+    metadata: { class: client_controlled_authz, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: (HttpServletRequest $R).getHeader("$K")
+          - pattern: (HttpServletRequest $R).getParameter("$K")
+          - pattern: '@RequestHeader("$K")'
+          - pattern: '@RequestParam("$K")'
+          - pattern: '@CookieValue("$K")'
+          - pattern: $R.getHeader("$K")
+          - pattern: $R.getParameter("$K")
+      - metavariable-regex:
+          metavariable: $K
+          regex: (?i)^(x-)?(role|roles|isadmin|is_admin|admin|usertype|user_type|permission|permissions|privilege|accesslevel)$
+
+  - id: java-spring-permit-all-sensitive
+    languages: [java]
+    severity: WARNING
+    message: Sensitive path configured with permitAll().
+    metadata: { class: open_endpoint, confidence: medium }
+    patterns:
+      - pattern-either:
+          - pattern: $X.requestMatchers("$P", ...).permitAll()
+          - pattern: $X.antMatchers("$P", ...).permitAll()
+          - pattern: $X.mvcMatchers("$P", ...).permitAll()
+      - metavariable-regex:
+          metavariable: $P
+          regex: (?i).*(admin|internal|manage|actuator|users?/\*\*|config|debug|h2-console|api/\*\*|/\*\*$).*

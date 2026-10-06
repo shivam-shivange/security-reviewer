@@ -1,0 +1,447 @@
+# Python taint rules: untrusted input (Flask / Django / FastAPI / CLI) reaching dangerous sinks.
+# metadata.class maps to rules/taxonomy.yaml. Sanitizers stop a flow (=> not reported).
+rules:
+- id: py-sqli
+  mode: taint
+  languages:
+  - python
+  severity: ERROR
+  message: Untrusted input reaches a SQL query string ($SINK). Use a parameterised query.
+  metadata:
+    class: sqli
+    confidence: high
+  pattern-sources:
+  - pattern: flask.request.$ATTR
+  - pattern: flask.request.$ATTR.get(...)
+  - pattern: flask.request.$ATTR[...]
+  - pattern: flask.request.get_json(...)
+  - pattern: request.$ATTR.get(...)
+  - pattern: request.$ATTR[...]
+  - pattern: request.get_json(...)
+  - patterns:
+    - pattern: request.$ATTR
+    - metavariable-regex:
+        metavariable: $ATTR
+        regex: ^(args|form|values|json|data|cookies|headers|files|GET|POST|COOKIES|META|body|query_params|path_params)$
+  - pattern: input(...)
+  - pattern: sys.argv
+  - patterns:
+    - pattern-inside: "@$APP.$METHOD(...)\ndef $FN(..., $PARAM, ...):\n  ...\n"
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|delete|patch|api_route)$
+    - pattern: $PARAM
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $C.execute($Q, ...)
+      - pattern: $C.executemany($Q, ...)
+      - pattern: $C.executescript($Q)
+      - pattern: $M.objects.raw($Q, ...)
+      - pattern: $M.objects.extra(...)
+      - pattern: sqlalchemy.text($Q)
+      - pattern: text($Q)
+      - pattern: $DB.engine.execute($Q, ...)
+    - focus-metavariable: $Q
+  pattern-sanitizers:
+  - pattern: int(...)
+  - pattern: float(...)
+  - pattern: bool(...)
+  - pattern: uuid.UUID(...)
+- id: py-nosqli
+  mode: taint
+  languages:
+  - python
+  severity: ERROR
+  message: 'Request JSON flows into a MongoDB query; objects such as {"$ne": null} change the query logic.'
+  metadata:
+    class: nosqli
+    confidence: medium
+  pattern-sources:
+  - pattern: request.get_json(...)
+  - pattern: request.json
+  - pattern: flask.request.get_json(...)
+  - pattern: flask.request.json
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: $COL.$METHOD($Q, ...)
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(find|find_one|find_one_and_update|find_one_and_delete|update_one|update_many|delete_one|delete_many|count_documents|aggregate)$
+    - focus-metavariable: $Q
+  pattern-sanitizers:
+  - pattern: str(...)
+  - pattern: int(...)
+- id: py-cmdi
+  mode: taint
+  languages:
+  - python
+  severity: ERROR
+  message: Untrusted input reaches a shell command. Pass an argument list without shell=True.
+  metadata:
+    class: cmdi
+    confidence: high
+  pattern-sources:
+  - pattern: flask.request.$ATTR
+  - pattern: flask.request.$ATTR.get(...)
+  - pattern: flask.request.$ATTR[...]
+  - pattern: flask.request.get_json(...)
+  - pattern: request.$ATTR.get(...)
+  - pattern: request.$ATTR[...]
+  - pattern: request.get_json(...)
+  - patterns:
+    - pattern: request.$ATTR
+    - metavariable-regex:
+        metavariable: $ATTR
+        regex: ^(args|form|values|json|data|cookies|headers|files|GET|POST|COOKIES|META|body|query_params|path_params)$
+  - pattern: input(...)
+  - pattern: sys.argv
+  - patterns:
+    - pattern-inside: "@$APP.$METHOD(...)\ndef $FN(..., $PARAM, ...):\n  ...\n"
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|delete|patch|api_route)$
+    - pattern: $PARAM
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: os.system($CMD)
+      - pattern: os.popen($CMD, ...)
+      - pattern: subprocess.$F($CMD, ..., shell=True, ...)
+      - pattern: subprocess.getoutput($CMD)
+      - pattern: subprocess.getstatusoutput($CMD)
+      - pattern: commands.getoutput($CMD)
+    - focus-metavariable: $CMD
+  pattern-sanitizers:
+  - pattern: shlex.quote(...)
+  - pattern: int(...)
+- id: py-code-injection
+  mode: taint
+  languages:
+  - python
+  severity: ERROR
+  message: Untrusted input is evaluated as Python code.
+  metadata:
+    class: code_injection
+    confidence: high
+  pattern-sources:
+  - pattern: flask.request.$ATTR
+  - pattern: flask.request.$ATTR.get(...)
+  - pattern: flask.request.$ATTR[...]
+  - pattern: flask.request.get_json(...)
+  - pattern: request.$ATTR.get(...)
+  - pattern: request.$ATTR[...]
+  - pattern: request.get_json(...)
+  - patterns:
+    - pattern: request.$ATTR
+    - metavariable-regex:
+        metavariable: $ATTR
+        regex: ^(args|form|values|json|data|cookies|headers|files|GET|POST|COOKIES|META|body|query_params|path_params)$
+  - pattern: input(...)
+  - pattern: sys.argv
+  - patterns:
+    - pattern-inside: "@$APP.$METHOD(...)\ndef $FN(..., $PARAM, ...):\n  ...\n"
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|delete|patch|api_route)$
+    - pattern: $PARAM
+  pattern-sinks:
+  - pattern: eval(...)
+  - pattern: exec(...)
+  - pattern: compile(...)
+  pattern-sanitizers:
+  - pattern: ast.literal_eval(...)
+- id: py-path-traversal
+  mode: taint
+  languages:
+  - python
+  severity: ERROR
+  message: Untrusted input is used as a file path without confinement to a base directory.
+  metadata:
+    class: path_traversal
+    confidence: high
+  pattern-sources:
+  - pattern: flask.request.$ATTR
+  - pattern: flask.request.$ATTR.get(...)
+  - pattern: flask.request.$ATTR[...]
+  - pattern: flask.request.get_json(...)
+  - pattern: request.$ATTR.get(...)
+  - pattern: request.$ATTR[...]
+  - pattern: request.get_json(...)
+  - patterns:
+    - pattern: request.$ATTR
+    - metavariable-regex:
+        metavariable: $ATTR
+        regex: ^(args|form|values|json|data|cookies|headers|files|GET|POST|COOKIES|META|body|query_params|path_params)$
+  - pattern: input(...)
+  - pattern: sys.argv
+  - patterns:
+    - pattern-inside: "@$APP.$METHOD(...)\ndef $FN(..., $PARAM, ...):\n  ...\n"
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|delete|patch|api_route)$
+    - pattern: $PARAM
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: open($P, ...)
+      - pattern: io.open($P, ...)
+      - pattern: codecs.open($P, ...)
+      - pattern: flask.send_file($P, ...)
+      - pattern: send_file($P, ...)
+      - pattern: os.remove($P)
+      - pattern: os.unlink($P)
+      - pattern: shutil.rmtree($P, ...)
+      - pattern: shutil.copy($P, ...)
+      - pattern: pathlib.Path($P)
+      - pattern: Path($P)
+      - pattern: django.http.FileResponse(open($P, ...))
+    - focus-metavariable: $P
+  pattern-sanitizers:
+  - pattern: os.path.basename(...)
+  - pattern: werkzeug.utils.secure_filename(...)
+  - pattern: secure_filename(...)
+  - pattern: werkzeug.utils.safe_join(...)
+  - pattern: safe_join(...)
+- id: py-ssrf
+  mode: taint
+  languages:
+  - python
+  severity: ERROR
+  message: Untrusted input controls the URL of an outbound request (SSRF).
+  metadata:
+    class: ssrf
+    confidence: high
+  pattern-sources:
+  - pattern: flask.request.$ATTR
+  - pattern: flask.request.$ATTR.get(...)
+  - pattern: flask.request.$ATTR[...]
+  - pattern: flask.request.get_json(...)
+  - pattern: request.$ATTR.get(...)
+  - pattern: request.$ATTR[...]
+  - pattern: request.get_json(...)
+  - patterns:
+    - pattern: request.$ATTR
+    - metavariable-regex:
+        metavariable: $ATTR
+        regex: ^(args|form|values|json|data|cookies|headers|files|GET|POST|COOKIES|META|body|query_params|path_params)$
+  - pattern: input(...)
+  - pattern: sys.argv
+  - patterns:
+    - pattern-inside: "@$APP.$METHOD(...)\ndef $FN(..., $PARAM, ...):\n  ...\n"
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|delete|patch|api_route)$
+    - pattern: $PARAM
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: requests.$M($URL, ...)
+      - pattern: requests.request($METHOD, $URL, ...)
+      - pattern: httpx.$M($URL, ...)
+      - pattern: urllib.request.urlopen($URL, ...)
+      - pattern: urllib.request.Request($URL, ...)
+      - pattern: urlopen($URL, ...)
+    - focus-metavariable: $URL
+  pattern-sanitizers:
+  - pattern: validate_url(...)
+  - pattern: is_allowed_url(...)
+  - pattern: _secreview_safe_url(...)
+- id: py-xss
+  mode: taint
+  languages:
+  - python
+  severity: WARNING
+  message: Untrusted input is written into an HTML response without escaping.
+  metadata:
+    class: xss
+    confidence: medium
+  pattern-sources:
+  - pattern: flask.request.$ATTR
+  - pattern: flask.request.$ATTR.get(...)
+  - pattern: flask.request.$ATTR[...]
+  - pattern: flask.request.get_json(...)
+  - pattern: request.$ATTR.get(...)
+  - pattern: request.$ATTR[...]
+  - pattern: request.get_json(...)
+  - patterns:
+    - pattern: request.$ATTR
+    - metavariable-regex:
+        metavariable: $ATTR
+        regex: ^(args|form|values|json|data|cookies|headers|files|GET|POST|COOKIES|META|body|query_params|path_params)$
+  - pattern: input(...)
+  - pattern: sys.argv
+  - patterns:
+    - pattern-inside: "@$APP.$METHOD(...)\ndef $FN(..., $PARAM, ...):\n  ...\n"
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|delete|patch|api_route)$
+    - pattern: $PARAM
+  pattern-sinks:
+  - pattern: flask.render_template_string(...)
+  - pattern: render_template_string(...)
+  - pattern: flask.make_response(...)
+  - pattern: make_response(...)
+  - pattern: markupsafe.Markup(...)
+  - pattern: Markup(...)
+  - pattern: django.utils.safestring.mark_safe(...)
+  - pattern: mark_safe(...)
+  - pattern: django.http.HttpResponse(...)
+  - pattern: HttpResponse(...)
+  - patterns:
+    - pattern-inside: "@$APP.route(...)\ndef $FN(...):\n  ...\n"
+    - pattern: return $X
+    - focus-metavariable: $X
+  pattern-sanitizers:
+  - pattern: html.escape(...)
+  - pattern: markupsafe.escape(...)
+  - pattern: escape(...)
+  - pattern: bleach.clean(...)
+  - pattern: flask.jsonify(...)
+  - pattern: jsonify(...)
+  - pattern: json.dumps(...)
+  - pattern: render_template(...)
+  - pattern: redirect(...)
+  - pattern: int(...)
+- id: py-open-redirect
+  mode: taint
+  languages:
+  - python
+  severity: WARNING
+  message: Untrusted input controls a redirect target (open redirect).
+  metadata:
+    class: open_redirect
+    confidence: medium
+  pattern-sources:
+  - pattern: flask.request.$ATTR
+  - pattern: flask.request.$ATTR.get(...)
+  - pattern: flask.request.$ATTR[...]
+  - pattern: flask.request.get_json(...)
+  - pattern: request.$ATTR.get(...)
+  - pattern: request.$ATTR[...]
+  - pattern: request.get_json(...)
+  - patterns:
+    - pattern: request.$ATTR
+    - metavariable-regex:
+        metavariable: $ATTR
+        regex: ^(args|form|values|json|data|cookies|headers|files|GET|POST|COOKIES|META|body|query_params|path_params)$
+  - pattern: input(...)
+  - pattern: sys.argv
+  - patterns:
+    - pattern-inside: "@$APP.$METHOD(...)\ndef $FN(..., $PARAM, ...):\n  ...\n"
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|delete|patch|api_route)$
+    - pattern: $PARAM
+  pattern-sinks:
+  - pattern: flask.redirect(...)
+  - pattern: redirect(...)
+  - pattern: django.http.HttpResponseRedirect(...)
+  - pattern: HttpResponseRedirect(...)
+  pattern-sanitizers:
+  - pattern: url_for(...)
+  - pattern: url_has_allowed_host_and_scheme(...)
+  - pattern: is_safe_url(...)
+- id: py-xxe-lxml
+  mode: taint
+  languages:
+  - python
+  severity: ERROR
+  message: Untrusted XML is parsed with lxml, which resolves entities by default (XXE). Use defusedxml.
+  metadata:
+    class: xxe
+    confidence: medium
+  pattern-sources:
+  - pattern: flask.request.$ATTR
+  - pattern: flask.request.$ATTR.get(...)
+  - pattern: flask.request.$ATTR[...]
+  - pattern: flask.request.get_json(...)
+  - pattern: request.$ATTR.get(...)
+  - pattern: request.$ATTR[...]
+  - pattern: request.get_json(...)
+  - patterns:
+    - pattern: request.$ATTR
+    - metavariable-regex:
+        metavariable: $ATTR
+        regex: ^(args|form|values|json|data|cookies|headers|files|GET|POST|COOKIES|META|body|query_params|path_params)$
+  - pattern: input(...)
+  - pattern: sys.argv
+  - patterns:
+    - pattern-inside: "@$APP.$METHOD(...)\ndef $FN(..., $PARAM, ...):\n  ...\n"
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|delete|patch|api_route)$
+    - pattern: $PARAM
+  pattern-sinks:
+  - pattern: lxml.etree.fromstring(...)
+  - pattern: lxml.etree.parse(...)
+  - pattern: lxml.etree.XML(...)
+  - pattern: xml.dom.minidom.parseString(...)
+  - pattern: xml.sax.parseString(...)
+- id: py-deserialization-taint
+  mode: taint
+  languages:
+  - python
+  severity: ERROR
+  message: Untrusted data is deserialised with an unsafe deserialiser (RCE risk).
+  metadata:
+    class: deserialization
+    confidence: high
+  pattern-sources:
+  - pattern: flask.request.$ATTR
+  - pattern: flask.request.$ATTR.get(...)
+  - pattern: flask.request.$ATTR[...]
+  - pattern: flask.request.get_json(...)
+  - pattern: request.$ATTR.get(...)
+  - pattern: request.$ATTR[...]
+  - pattern: request.get_json(...)
+  - patterns:
+    - pattern: request.$ATTR
+    - metavariable-regex:
+        metavariable: $ATTR
+        regex: ^(args|form|values|json|data|cookies|headers|files|GET|POST|COOKIES|META|body|query_params|path_params)$
+  - pattern: input(...)
+  - pattern: sys.argv
+  - patterns:
+    - pattern-inside: "@$APP.$METHOD(...)\ndef $FN(..., $PARAM, ...):\n  ...\n"
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|delete|patch|api_route)$
+    - pattern: $PARAM
+  pattern-sinks:
+  - pattern: pickle.loads(...)
+  - pattern: pickle.load(...)
+  - pattern: cPickle.loads(...)
+  - pattern: marshal.loads(...)
+  - pattern: jsonpickle.decode(...)
+  - pattern: dill.loads(...)
+  - patterns:
+    - pattern: yaml.load($X, ...)
+    - pattern-not: yaml.load($X, Loader=yaml.SafeLoader)
+    - pattern-not: yaml.load($X, Loader=SafeLoader)
+    - pattern-not: yaml.load($X, Loader=yaml.CSafeLoader)
+- id: py-mass-assignment
+  mode: taint
+  languages:
+  - python
+  severity: WARNING
+  message: The whole request body is bound to a model object; attackers can set fields such as role or is_admin.
+  metadata:
+    class: mass_assignment
+    confidence: medium
+  pattern-sources:
+  - pattern: request.get_json(...)
+  - pattern: request.json
+  - pattern: request.form
+  - pattern: request.data
+  pattern-sinks:
+  - patterns:
+    - pattern: $MODEL(**$DATA)
+    - focus-metavariable: $DATA
+  - patterns:
+    - pattern: $OBJ.__dict__.update($DATA)
+    - focus-metavariable: $DATA
+  - patterns:
+    - pattern: setattr($OBJ, $K, ...)
+    - focus-metavariable: $K
