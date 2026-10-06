@@ -129,12 +129,14 @@ async function startScan(){
   if($("#provider").value) options["llm.provider"]=$("#provider").value;
   $("#scanmsg").textContent="starting…";
   try{
-    const r = await api("/api/scan",{method:"POST",headers:{"content-type":"application/json"},
+    const res = await fetch("/api/scan",{method:"POST",headers:{"content-type":"application/json"},
       body:JSON.stringify({project, options, no_ground: $("#noground").checked})});
+    if(!res.ok){ const d = await res.json().catch(()=>({})); $("#scanmsg").textContent = d.detail || `failed to start (HTTP ${res.status})`; return; }
+    const r = await res.json();
     $("#scanmsg").textContent="";
     await loadRuns();
     if(r.run_id) openRun(r.run_id);
-  }catch(e){ $("#scanmsg").textContent="failed to start (check the path)"; }
+  }catch(e){ $("#scanmsg").textContent="could not reach the backend"; }
 }
 
 function openRun(id){

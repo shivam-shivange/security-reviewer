@@ -75,9 +75,15 @@ def create_app(cfg: Config):
     @app.post("/api/scan")
     def scan(body: dict):
         from ..pipeline import run_pipeline
-        project = Path(body["project"]).resolve()
+        raw = (body.get("project") or "").strip().strip('"')
+        project = Path(raw).resolve()
+        if ".zip" in raw.lower() or ".tar" in raw.lower():
+            raise HTTPException(400, "That path points inside an archive. Extract the .zip/.tar first "
+                                     "and scan the extracted folder.")
+        if not project.exists():
+            raise HTTPException(400, f"Path does not exist: {project}")
         if not project.is_dir():
-            raise HTTPException(400, "not a directory")
+            raise HTTPException(400, f"Not a folder (point at a project directory, not a file): {project}")
         run_cfg = cfg.copy()
         for k, v in (body.get("options") or {}).items():
             run_cfg.set(k, v)
