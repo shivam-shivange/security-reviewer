@@ -114,8 +114,13 @@ Built:
 - Tests: `tests/` (rules valid, taxonomy, 42 fixers on snippets, pipeline smoke + ablation).
 - Setup: `scripts/setup_tools.{py,ps1,sh}` install tools into `.venv/` and `tools/`.
 
-**TODO:** web dashboard (CLI stub present), Java verification harness, Node harness wired into Docker
-image, more sample apps (Express/Spring), evaluation runner for `docs/datasets.md`.
+**Dashboard DONE (2026-10-07):** live web UI at `secreview dashboard` — runs list, stage progress,
+event log, findings (evidence/diff/verification), API-surface table, permission approve/deny.
+
+**TODO:** Java verification harness, Node harness wired into the Docker image, more sample apps
+(Express+MongoDB / Spring) for the evaluation phase, evaluation runner for `docs/datasets.md`.
+Git: still local only (not pushed; user chose "keep local"). Only `examples/flask-vuln` exists as a
+built-in smoke-test fixture (user informed).
 
 ## 7. Gotchas learned (save time later)
 - **Semgrep skips dot-directories and respects the enclosing git repo's `.gitignore`.** Scanning a
