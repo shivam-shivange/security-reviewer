@@ -91,7 +91,8 @@ th{color:var(--muted);font-weight:600}
         <option value="docker">Sandbox: docker (isolated)</option>
         <option value="local">Sandbox: local (dev, not isolated)</option>
       </select>
-      <label class="muted" style="font-size:12px"><input type="checkbox" id="noground" style="width:auto"> ablation: skip Ground</label>
+      <label class="muted" style="font-size:12px;display:block"><input type="checkbox" id="noverify" style="width:auto" checked> detection only (skip Verify — runs no code, no Docker)</label>
+      <label class="muted" style="font-size:12px;display:block"><input type="checkbox" id="noground" style="width:auto"> ablation: skip Ground</label>
       <button class="btn" style="width:100%;margin-top:6px" onclick="startScan()">Start scan</button>
       <div id="scanmsg" class="muted" style="font-size:11px;margin-top:4px"></div>
     </div>
@@ -125,7 +126,7 @@ async function startScan(){
   const project = $("#projpath").value.trim();
   if(!project){ $("#scanmsg").textContent="enter a project path"; return; }
   const options = {"llm.enabled": !!$("#provider").value, "verify.sandbox": $("#sandbox").value,
-                   "permissions.mode":"ask"};
+                   "verify.enabled": !$("#noverify").checked, "permissions.mode":"ask"};
   if($("#provider").value) options["llm.provider"]=$("#provider").value;
   $("#scanmsg").textContent="starting…";
   try{
@@ -263,6 +264,8 @@ async function decide(pid,decision,remember){
   refresh();
 }
 
+function syncVerifyToggle(){ const nv=$("#noverify").checked; $("#sandbox").disabled=nv; $("#sandbox").style.opacity=nv?.4:1; }
+$("#noverify").addEventListener("change", syncVerifyToggle); syncVerifyToggle();
 loadRuns(); setInterval(loadRuns, 4000);
 </script>
 </body>
