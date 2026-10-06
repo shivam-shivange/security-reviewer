@@ -26,6 +26,12 @@ def create_app(cfg: Config):
     app = FastAPI(title="secreview dashboard")
     store = Store(cfg.workspace / "secreview.sqlite")
     jobs: dict[str, threading.Thread] = {}
+    scan_state = {"active": False}   # this machine runs one scan at a time
+
+    # Mark runs orphaned by a previous dashboard process (still "running") as failed on startup.
+    for r in store.list_runs(200):
+        if r["status"] == "running":
+            store.update_run(r["id"], status="failed", error="interrupted (dashboard restarted)")
 
     @app.get("/", response_class=HTMLResponse)
     def index():
@@ -84,17 +90,22 @@ def create_app(cfg: Config):
             raise HTTPException(400, f"Path does not exist: {project}")
         if not project.is_dir():
             raise HTTPException(400, f"Not a folder (point at a project directory, not a file): {project}")
+        if scan_state["active"]:
+            raise HTTPException(409, "A scan is already running. This machine runs one scan at a time — "
+                                     "let it finish (or stop it) before starting another.")
         run_cfg = cfg.copy()
         for k, v in (body.get("options") or {}).items():
             run_cfg.set(k, v)
-        holder: dict = {}
 
         def worker():
+            scan_state["active"] = True
             try:
                 run_pipeline(run_cfg, project, store, interactive=False, echo=False,
                              ground_enabled=not body.get("no_ground", False))
-            except Exception as exc:  # already recorded on the run row
-                holder["error"] = str(exc)
+            except Exception:  # already recorded on the run row
+                pass
+            finally:
+                scan_state["active"] = False
 
         t = threading.Thread(target=worker, daemon=True)
         t.start()

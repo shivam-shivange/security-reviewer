@@ -62,7 +62,7 @@ def run_osv(ctx: RunContext) -> list[Finding] | None:
     """Returns None when osv-scanner is unavailable so callers can fall back."""
     if not tools.which("osv-scanner"):
         return None
-    res = tools.run(["osv-scanner", "scan", "source", "--format", "json", "-r", "."], cwd=ctx.project, timeout=900)
+    res = tools.run(["osv-scanner", "scan", "source", "--format", "json", "-r", "."], cwd=ctx.project, timeout=300)
     if not res.stdout.strip():
         res = tools.run(["osv-scanner", "--format", "json", "-r", "."], cwd=ctx.project, timeout=900)
     try:
@@ -97,7 +97,10 @@ def run_pip_audit(ctx: RunContext, module: Module) -> list[Finding]:
     if not req.is_file() or not tools.which("pip-audit"):
         return []
     res = tools.run(["pip-audit", "-r", str(req), "-f", "json", "--progress-spinner", "off"],
-                    cwd=mod_dir, timeout=900)
+                    cwd=mod_dir, timeout=180)
+    if res.timed_out:
+        ctx.warn(f"pip-audit timed out for {module.path}; skipping its dependency scan")
+        return []
     try:
         data = json.loads(res.stdout or "{}")
     except json.JSONDecodeError:
@@ -121,7 +124,10 @@ def run_npm_audit(ctx: RunContext, module: Module) -> list[Finding]:
         return []
     if not tools.which("npm"):
         return []
-    res = tools.run(["npm", "audit", "--json", "--package-lock-only"], cwd=mod_dir, timeout=600)
+    res = tools.run(["npm", "audit", "--json", "--package-lock-only", "--no-fund"], cwd=mod_dir, timeout=120)
+    if res.timed_out:
+        ctx.warn(f"npm audit timed out for {module.path}; skipping its dependency scan")
+        return []
     try:
         data = json.loads(res.stdout or "{}")
     except json.JSONDecodeError:
