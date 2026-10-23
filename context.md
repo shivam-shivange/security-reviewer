@@ -180,6 +180,9 @@ Not done: JavaScript/Java LLM-app rules (Python only so far).
   path-traversal verify on Docker/Linux, not Windows local mode (expected).
 
 ## 8. Change log
+- 2026-10-23: `plan.md` created: phase status (~55% overall) and milestone timeline M1–M7 to the
+  final defence (assumed late April 2027; dates to be matched to the college calendar).
+- 2026-10-23: main pushed (pre-today code); `new_updates` branch pushed with today's work.
 - 2026-10-23: AI/LLM + supply-chain + git-aware-secrets detection added (see 5b gap analysis). 28 tests pass.
 - 2026-10-06: **Initial implementation committed** (commit 5979150, 104 files, local only — NOT
   pushed to the public remote yet, pending user confirmation; .docx kept out of git — contain PII).
