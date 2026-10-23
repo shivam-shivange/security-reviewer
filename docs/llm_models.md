@@ -16,12 +16,18 @@ the fixed check, the patch is correct (diff in §3.2).
 gemma3:4b's "passes" on the safe cases came from the tool's source check catching a wrong answer, not
 from the model (see §3.3).
 
-**Recommendation for experiments:** use **OpenRouter Laguna S 2.1** as the main backend, because it is the most
-accurate. Use **Gemini 3.5 Flash-Lite** as the fast second backend. Keep **Ollama** for the local/privacy
-comparison only.
+**Project setup (decided 2026-10-24): fallback chain OpenRouter → Gemini → local Qwen.**
+`llm.provider = "fallback"` tries the providers in this order: the most accurate first, the fastest
+second, and the private, slow local model last. It moves on when a provider is unavailable,
+rate-limited, out of quota or returns invalid JSON, and skips a failed provider for 5 minutes
+(`llm.fallback_cooldown_seconds`). The run summary shows which provider answered (`llm.served_by`).
 
-These are set in `config/default.toml` and in `.env` (`SECREVIEW_*_MODEL`). Switch provider with
-`--provider local|openrouter|gemini` or `SECREVIEW_LLM_PROVIDER`.
+Live check, 2026-10-24: normal run → OpenRouter answered. OpenRouter model broken on purpose → Gemini
+answered. OpenRouter and Gemini both broken → local qwen3.5:4b answered. Unit tests:
+`tests/test_llm_fallback.py`.
+
+The models are set in `config/default.toml` and `.env` (`SECREVIEW_*_MODEL`). To use one provider only,
+pass `--provider local|openrouter|gemini` or set `SECREVIEW_LLM_PROVIDER`.
 
 ## 1. How the models were tested
 

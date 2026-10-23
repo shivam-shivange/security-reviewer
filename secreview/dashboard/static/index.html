@@ -83,6 +83,7 @@ th{color:var(--muted);font-weight:600}
       <input id="projpath" placeholder="path to project to scan" />
       <select id="provider">
         <option value="">LLM: disabled (deterministic only)</option>
+        <option value="fallback">LLM: fallback (OpenRouter &gt; Gemini &gt; local)</option>
         <option value="local">LLM: local (Ollama)</option>
         <option value="openrouter">LLM: OpenRouter</option>
         <option value="gemini">LLM: Gemini</option>

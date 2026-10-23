@@ -73,9 +73,16 @@ Configured in [config/default.toml](config/default.toml) or via env vars; pick w
 
 | Provider | Setting | Key |
 |----------|---------|-----|
-| `local` (Ollama, default) | `SECREVIEW_LOCAL_MODEL`, `OLLAMA_HOST` | none |
+| `fallback` (default) | `llm.fallback_order` (default `openrouter` → `gemini` → `local`) | the keys of the cloud members |
+| `local` (Ollama) | `SECREVIEW_LOCAL_MODEL`, `OLLAMA_HOST` | none |
 | `openrouter` | `SECREVIEW_OPENROUTER_MODEL` | `OPENROUTER_API_KEY` |
 | `gemini` | `SECREVIEW_GEMINI_MODEL` | `GEMINI_API_KEY` |
+
+`fallback` tries each provider in order. It moves to the next one when a provider is unavailable,
+rate-limited, out of quota or returns invalid JSON, and it skips a failed provider for
+`llm.fallback_cooldown_seconds`. Providers without a key are dropped at start. If you decline sending
+code to the cloud, the chain continues with the local model only. The run summary shows which provider
+answered how many calls (`llm.served_by`). Model choice and test results: [docs/llm_models.md](docs/llm_models.md).
 
 The tool runs fully without any LLM (`--no-llm`); responses are cached so repeat scans are free.
 

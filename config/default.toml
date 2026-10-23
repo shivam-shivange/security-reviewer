@@ -3,7 +3,9 @@
 
 [llm]
 enabled = true
-provider = "local"            # local | openrouter | gemini
+provider = "fallback"         # local | openrouter | gemini | fallback (tries fallback_order in turn)
+fallback_order = ["openrouter", "gemini", "local"]   # most accurate first; local last (slow, private)
+fallback_cooldown_seconds = 300   # skip a provider this long after it fails (e.g. free quota used up)
 temperature = 0.1
 timeout_seconds = 300          # local 4B models on CPU need ~2-3 min per call
 max_retries = 2

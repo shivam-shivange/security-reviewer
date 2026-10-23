@@ -144,7 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("scan", help="scan a project")
     sp.add_argument("project", help="path to the project to scan")
-    sp.add_argument("--provider", choices=["local", "openrouter", "gemini"], help="LLM backend")
+    sp.add_argument("--provider", choices=["local", "openrouter", "gemini", "fallback"], help="LLM backend")
     sp.add_argument("--no-llm", action="store_true", help="run deterministic-only (no LLM)")
     sp.add_argument("--no-ground", action="store_true", help="ablation: skip the Ground stage")
     sp.add_argument("--sandbox", choices=["docker", "local"], help="verification sandbox")
@@ -159,7 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_tools)
 
     sp = sub.add_parser("llm", help="check the configured LLM backend")
-    sp.add_argument("--provider", choices=["local", "openrouter", "gemini"])
+    sp.add_argument("--provider", choices=["local", "openrouter", "gemini", "fallback"])
     sp.add_argument("--test", action="store_true", help="send a tiny test prompt")
     common(sp)
     sp.set_defaults(func=cmd_llm)

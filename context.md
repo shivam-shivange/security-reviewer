@@ -180,6 +180,10 @@ Not done: JavaScript/Java LLM-app rules (Python only so far).
   path-traversal verify on Docker/Linux, not Windows local mode (expected).
 
 ## 8. Change log
+- 2026-10-24: **LLM fallback chain decided and built**: `llm.provider = "fallback"` (default; also in `.env`),
+  order OpenRouter → Gemini → local Qwen (`llm.fallback_order`), 300 s cooldown for a failed provider,
+  invalid JSON falls through without cooldown, declined cloud consent leaves only local. `llm/fallback.py`,
+  `tests/test_llm_fallback.py`; live-tested all three paths. 35 tests pass.
 - 2026-10-23: **LLM models chosen by bake-off** (see `docs/llm_models.md`): OpenRouter
   `poolside/laguna-s-2.1:free` (4/4, main), Gemini `gemini-3.5-flash-lite` (4/4, fastest), Ollama
   `qwen3.5:4b` (2/4, ~2–2.5 min/call on CPU; small local models are unreliable). Set in
