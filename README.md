@@ -55,6 +55,8 @@ secreview llm --test       # check the configured LLM backend
 secreview runs             # list past runs
 secreview report --open    # open the latest HTML report
 secreview dashboard        # live web dashboard
+
+.\.venv\Scripts\python.exe -m secreview.cli dashboard  # start the project
 ```
 
 Key flags: `--sandbox docker|local` (local is **not** isolated — dev only), `--no-ground`
