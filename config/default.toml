@@ -5,13 +5,13 @@
 enabled = true
 provider = "local"            # local | openrouter | gemini
 temperature = 0.1
-timeout_seconds = 180
+timeout_seconds = 300          # local 4B models on CPU need ~2-3 min per call
 max_retries = 2
 cache = true                  # cache responses by prompt hash; repeat scans cost nothing
 
 [llm.local]
 host = "http://localhost:11434"
-model = "gemma3:4b"              # models chosen by the 2026-10-23 bake-off: see docs/llm_models.md
+model = "qwen3.5:4b"             # models chosen by the 2026-10-23 bake-off: see docs/llm_models.md
 
 [llm.openrouter]
 base_url = "https://openrouter.ai/api/v1"

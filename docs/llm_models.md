@@ -9,12 +9,12 @@ free-tier limits change every few weeks.
 |---|---|---|---|---|
 | **OpenRouter** (free) | `poolside/laguna-s-2.1:free` | **4/4** | ~10 s | The only model to pass every task. Built for coding agents, 262k context |
 | **Gemini** (free tier) | `gemini-3.5-flash-lite` | **4/4**¹ | ~2 s | Fastest by far, and correct on every task. Flash-Lite gets far more free daily requests than Flash |
-| **Ollama** (local) | `gemma3:4b` (provisional) | 1/4 real² | 25–70 s | Best of the installed models that fit 7.3 GB RAM. Not reliable enough for experiments; use it only when code must stay on the machine |
+| **Ollama** (local) | `qwen3.5:4b` | 2/4 | 2–2.5 min | The only installed model whose verdicts were both correct on its own (gemma3:4b was faster but wrong). Too slow and incomplete for experiments; use it only when code must stay on the machine. `llm.timeout_seconds` raised to 300 for it |
 
 ¹ The bake-off script first marked its patch as failed because of a bug in the checker (§4). Re-run with
 the fixed check, the patch is correct (diff in §3.2).
-² See §3.3: its "passes" on the safe cases came from the tool's source check catching a wrong answer, not
-from the model.
+gemma3:4b's "passes" on the safe cases came from the tool's source check catching a wrong answer, not
+from the model (see §3.3).
 
 **Recommendation for experiments:** use **OpenRouter Laguna S 2.1** as the main backend, because it is the most
 accurate. Use **Gemini 3.5 Flash-Lite** as the fast second backend. Keep **Ollama** for the local/privacy
@@ -90,7 +90,11 @@ The Gemini 3.5 Flash-Lite patch (from a re-run):
 |---|---|---|---|---|---|---|
 | gemma3:4b | ✅ 69.2 | ⚠️ said "true positive"; chain failed the source check → discarded, 30.7 | ❌ wrongly grounded, 24.9 | ❌ no usable patch, 15.9 | 1/4 real (2/4 counted) | 141 s |
 | qwen2.5-coder:1.5b | ❌ Ollama aborted: "token repeat limit", 47.8 | ❌ wrongly grounded, 195.7 | ⚠️ said "true positive"; chain failed the check → discarded, 13.4 | ❌ no patch, 10.1 | 0/4 real (1/4 counted) | 267 s |
-| qwen3.5:4b | _still running when this file was written; add its row here_ | | | | | |
+| **qwen3.5:4b** | ✅ 148.0 | ✅ 120.0 | ❌ timed out at 180 s (×3 retries), 560.3 | ❌ no patch, 66.6 | **2/4** | 895 s |
+
+qwen3.5:4b is a "thinking" model. It reasons before it answers, which makes it about 4× slower than
+gemma3:4b on this CPU, but both of its verdicts were genuinely correct. The tool's timeout was
+180 s per call during this test; it is now 300 s.
 
 The ⚠️ cases count as passes in the script, but the model was wrong. The tool's source check rejected
 its invented evidence chain, and the finding was discarded for that reason. This shows the source check
@@ -124,4 +128,4 @@ Quota used by this test: about 20 OpenRouter requests (of 50/day) and about 15 G
 |---|---|
 | Gemini (`gemini-3.5-flash-lite`) | ✅ reachable, returned `{"ok": true}` |
 | OpenRouter (`poolside/laguna-s-2.1:free`) | ✅ reachable, returned `{"ok": true}` |
-| Ollama (`gemma3:4b`) | _run after the qwen3.5 test finishes_ |
+| Ollama (`qwen3.5:4b`) | ✅ reachable, returned `{"ok": true}` |
