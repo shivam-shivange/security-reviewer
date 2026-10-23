@@ -26,11 +26,14 @@ def blame(project: Path, rel_file: str, line: int) -> Provenance | None:
     return Provenance(commit=commit[:12], author=info.get("author", ""), date=date, summary=info.get("summary", ""))
 
 
-def annotate(project: Path, findings: list[Finding]) -> int:
+def annotate(project: Path, findings: list[Finding], tick=None) -> int:
+    """`tick(done, total)` is called as it goes (progress + Stop/Skip checkpoints)."""
     if not (project / ".git").exists() or not tools.which("git"):
         return 0
     n = 0
-    for f in findings:
+    for i, f in enumerate(findings, 1):
+        if tick and i % 20 == 0:
+            tick(i, len(findings))
         if f.line > 0 and not f.provenance:
             p = blame(project, f.file, f.line)
             if p:

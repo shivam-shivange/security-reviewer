@@ -50,6 +50,10 @@ class Store:
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.executescript(SCHEMA)
+        # databases made before stop/skip existed: add the control column in place
+        if "control" not in [r[1] for r in self._db.execute("PRAGMA table_info(runs)")]:
+            self._db.execute("ALTER TABLE runs ADD COLUMN control TEXT DEFAULT ''")
+            self._db.commit()
 
     def _exec(self, sql: str, args: tuple = ()) -> sqlite3.Cursor:
         with self._lock:
@@ -64,9 +68,22 @@ class Store:
     # ---- runs -------------------------------------------------------------------------
     def create_run(self, target: str, options: dict) -> str:
         run_id = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
-        self._exec("INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?)",
-                   (run_id, target, "running", "", time.time(), None, json.dumps(options), "{}", ""))
+        self._exec("INSERT INTO runs (id, target, status, stage, started, finished, options, summary, error, control) "
+                   "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                   (run_id, target, "running", "", time.time(), None, json.dumps(options), "{}", "", ""))
         return run_id
+
+    # ---- live control: the dashboard asks a running scan to stop or skip a stage --------
+    def request_control(self, run_id: str, action: str) -> None:
+        """action: "stop" or "skip:<stage>". The pipeline acts on it at its next checkpoint."""
+        self._exec("UPDATE runs SET control=? WHERE id=?", (action, run_id))
+
+    def control(self, run_id: str) -> str:
+        rows = self._all("SELECT control FROM runs WHERE id=?", (run_id,))
+        return (rows[0]["control"] or "") if rows else ""
+
+    def clear_control(self, run_id: str) -> None:
+        self._exec("UPDATE runs SET control='' WHERE id=?", (run_id,))
 
     def update_run(self, run_id: str, **fields: Any) -> None:
         for key, value in fields.items():
@@ -99,7 +116,7 @@ class Store:
             self._exec("INSERT INTO stages VALUES (?,?,?,?,?,?,?,?)",
                        (run_id, name, status, done, total, now, None, note))
         else:
-            finished = now if status in ("done", "failed", "skipped") else None
+            finished = now if status in ("done", "failed", "skipped", "stopped") else None
             self._exec("UPDATE stages SET status=?, done=?, total=?, finished=?, note=? "
                        "WHERE run_id=? AND name=?", (status, done, total, finished, note, run_id, name))
         if status == "running":
@@ -109,6 +126,10 @@ class Store:
     def add_event(self, run_id: str, level: str, stage: str, message: str, data: dict | None = None) -> None:
         self._exec("INSERT INTO events (run_id, ts, level, stage, message, data) VALUES (?,?,?,?,?,?)",
                    (run_id, time.time(), level, stage, message, json.dumps(data or {})))
+
+    def last_event_ts(self, run_id: str) -> float | None:
+        rows = self._all("SELECT MAX(ts) AS ts FROM events WHERE run_id=?", (run_id,))
+        return rows[0]["ts"] if rows else None
 
     def events(self, run_id: str, after_id: int = 0, limit: int = 500) -> list[dict]:
         rows = self._all("SELECT * FROM events WHERE run_id=? AND id>? ORDER BY id LIMIT ?",

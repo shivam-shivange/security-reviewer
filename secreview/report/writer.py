@@ -53,6 +53,8 @@ def write_reports(ctx: RunContext, findings: list[Finding], endpoints, info, sum
 
     patches_dir = out / "patches"
     patches_dir.mkdir(exist_ok=True)
+    for stale in [*patches_dir.glob("*.patch"), out / "verified_fixes.patch"]:   # a continued run rewrites them
+        stale.unlink(missing_ok=True)
     combined = []
     for f in findings:
         p = f.patch or f.recommended_patch

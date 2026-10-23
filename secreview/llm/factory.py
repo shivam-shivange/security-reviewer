@@ -26,7 +26,7 @@ def get_llm(config: Config, provider: str | None = None, log=None) -> LLMClient:
     common = dict(
         model=settings.pop("model"),
         temperature=config.get("llm.temperature", 0.1),
-        timeout=config.get("llm.timeout_seconds", 180),
+        timeout=settings.pop("timeout_seconds", None) or config.get("llm.timeout_seconds", 90),
         max_retries=config.get("llm.max_retries", 2),
         cache=LLMCache(config.workspace / "llm_cache.sqlite") if config.get("llm.cache", True) else None,
     )

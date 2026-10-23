@@ -175,6 +175,12 @@ header .tagline {
 .d-running { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 1.2s infinite; }
 .d-done { background: var(--ok); box-shadow: 0 0 6px var(--ok-glow); }
 .d-failed { background: var(--bad); }
+.d-stopped { background: var(--warn); }
+.run-controls { display: flex; align-items: center; gap: 8px; }
+.run-controls .pending { font-size: 11.5px; color: var(--warn); font-weight: 700; }
+.stage-step.step-stopped { border-color: rgba(245, 158, 11, 0.6); }
+.step-stopped .step-status-pill { background: rgba(245, 158, 11, 0.18); color: var(--warn); }
+.banner-badge.badge-stopped { background: rgba(245, 158, 11, 0.22); color: var(--warn); }
 @keyframes pulse { 0% { opacity: 0.3; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.15); } 100% { opacity: 0.3; transform: scale(0.9); } }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
@@ -402,6 +408,13 @@ header .tagline {
 }
 .step-skipped .step-status-pill { background: rgba(245, 158, 11, 0.14); color: var(--warn); }
 .step-skipped .step-progress-fill { background: transparent; }
+.stage-step.step-actionable { cursor: pointer; }
+.stage-step.step-actionable:hover { border-color: var(--accent); opacity: 1; box-shadow: 0 0 14px rgba(59, 130, 246, 0.25); }
+.step-run-hint { font-size: 11px; font-weight: 700; color: var(--accent); margin-top: 4px; }
+.continue-panel { background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius-md);
+  padding: 14px 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+.continue-panel .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 12.5px; }
+.continue-panel select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
 .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; }
 .filter-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px;
   background: rgba(59, 130, 246, 0.14); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--text); cursor: pointer; font-size: 12px; }
@@ -1309,6 +1322,7 @@ function renderMain() {
   m.innerHTML = `
     ${configHTML}
     ${permHTML}
+    ${renderContinuePrompt(run)}
     ${bannerHTML}
     ${stepperHTML}
     ${kpisHTML}
@@ -1343,6 +1357,125 @@ function switchTab(t) {
   state.tab = t;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.textContent.includes(t)));
   renderTabContent();
+}
+
+// --- Live control of a running scan: Stop, or Skip the current stage and go to the report ---
+const SKIPPABLE_STAGES = ["detect", "provenance", "ground", "verify"];
+
+function renderRunControls(run) {
+  if (!run || run.status !== "running") return "";
+  const ctl = run.control || "";
+  if (ctl) {
+    const what = ctl === "stop" ? "Stop requested" : `Skip of ${ctl.split(":")[1]} requested`;
+    return `<div class="run-controls"><span class="pending">⏳ ${esc(what)}: takes effect at the next checkpoint (an LLM call in flight finishes first)</span></div>`;
+  }
+  const stage = run.stage || "";
+  const skip = SKIPPABLE_STAGES.includes(stage)
+    ? `<button class="btn ghost sm" onclick="skipStage()" title="End this stage now and write the report with what is done">⏭ Skip ${esc(stage)} → Report</button>`
+    : "";
+  return `<div class="run-controls">${skip}<button class="btn bad sm" onclick="stopRun()" title="Stop the scan">⏹ Stop</button></div>`;
+}
+
+async function runControl(action, question) {
+  if (!state.runId || !confirm(question)) return;
+  try {
+    const res = await fetch(`/api/runs/${state.runId}/${action}`, { method: "POST" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { alert(d.detail || `Could not ${action} (HTTP ${res.status})`); return; }
+  } catch (e) { alert(String(e)); return; }
+  refresh();
+}
+
+function stopRun() {
+  runControl("stop", "Stop this scan?\n\nFindings found so far stay in the dashboard, and you can run Ground / Patch & Verify on them later.");
+}
+
+function skipStage() {
+  const stage = (state.run && state.run.stage) || "this stage";
+  runControl("skip", `Skip ${stage} and go straight to the report?\n\nWork already done in ${stage} is kept; you can run the skipped stages later by clicking their cards.`);
+}
+
+// --- Continue a finished run from a skipped stage (Ground / Patch & Verify) ---
+const CONTINUABLE_STAGES = ["ground", "verify"];
+const STAGE_TITLES = { ground: "4. Ground", verify: "5. Patch & Verify" };
+
+function promptContinue(stage) {
+  state.continuePrompt = { stage, error: "" };
+  renderMain();
+}
+
+function cancelContinue() {
+  state.continuePrompt = null;
+  renderMain();
+}
+
+function renderContinuePrompt(run) {
+  const cp = state.continuePrompt;
+  if (!cp || !run || run.status === "running") return "";
+  const n = (state.findings || []).length;
+  const then = cp.stage === "ground"
+    ? "Ground checks each finding for evidence (the LLM is asked only about ambiguous ones). Then Patch &amp; Verify and Report run again."
+    : "Patch &amp; Verify builds patches for the grounded findings and, if the sandbox is on, proves them by running the exploit. Then Report runs again.";
+  return `
+    <div class="continue-panel">
+      <div style="font-weight:700;font-size:14px">Run ${esc(STAGE_TITLES[cp.stage])} on this scan?</div>
+      <div style="font-size:12.5px;color:var(--text-secondary)">Uses the ${n} findings Detect already produced (no rescan). ${then}
+        The same run is updated; its report is rewritten.</div>
+      <div class="row">
+        <label>LLM:
+          <select id="contProvider">
+            <option value="fallback" selected>Fallback (OpenRouter &gt; Gemini &gt; Local)</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="gemini">Gemini</option>
+            <option value="local">Ollama (local)</option>
+            <option value="">Off (deterministic only)</option>
+          </select>
+        </label>
+        ${cp.stage === "ground" ? `<label><input type="checkbox" id="contVerify" /> Also execute patches in the sandbox (Verify)</label>` : ''}
+        <label>Sandbox:
+          <select id="contSandbox">
+            <option value="docker" selected>Docker (isolated)</option>
+            <option value="local">Local (not isolated)</option>
+          </select>
+        </label>
+      </div>
+      ${cp.error ? `<div style="color:var(--bad);font-size:12.5px">${esc(cp.error)}</div>` : ''}
+      <div style="display:flex;gap:8px">
+        <button class="btn primary sm" onclick="confirmContinue()">▶ Run ${esc(STAGE_TITLES[cp.stage])}</button>
+        <button class="btn ghost sm" onclick="cancelContinue()">Cancel</button>
+      </div>
+    </div>`;
+}
+
+async function confirmContinue() {
+  const cp = state.continuePrompt;
+  if (!cp || !state.runId) return;
+  const provider = $("#contProvider")?.value ?? "fallback";
+  const options = {
+    "llm.enabled": !!provider,
+    "verify.sandbox": $("#contSandbox")?.value ?? "docker",
+    "verify.enabled": cp.stage === "verify" ? true : !!$("#contVerify")?.checked,
+    "permissions.mode": "ask"
+  };
+  if (provider) options["llm.provider"] = provider;
+  try {
+    const res = await fetch(`/api/runs/${state.runId}/continue`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ from_stage: cp.stage, options })
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      state.continuePrompt.error = d.detail || `Could not start (HTTP ${res.status})`;
+      renderMain();
+      return;
+    }
+    state.continuePrompt = null;
+    openRun(state.runId);   // poll the run again: stages go queued -> running -> done
+  } catch (e) {
+    state.continuePrompt.error = String(e);
+    renderMain();
+  }
 }
 
 // --- Stepper: Clear Indication of Which Step is in Progress ---
@@ -1385,6 +1518,10 @@ function renderPipelineStepper(run) {
         statusLabel = "✕ Failed";
         pct = 100;
         note = st.note || "Error encountered";
+      } else if (st.status === "stopped") {
+        stepClass = "step-stopped";
+        statusLabel = "⏹ Stopped";
+        note = st.note || "Stopped by you";
       } else if (st.status === "skipped") {
         stepClass = "step-skipped";
         statusLabel = "⏭ Skipped";
@@ -1399,8 +1536,11 @@ function renderPipelineStepper(run) {
       note = "Not applicable";
     }
 
+    const actionable = CONTINUABLE_STAGES.includes(cs.key) && run.status !== "running"
+      && (!st || ["skipped", "failed", "stopped", "pending"].includes(st.status) || ["failed", "stopped"].includes(run.status));
     return `
-      <div class="stage-step ${stepClass}">
+      <div class="stage-step ${stepClass}${actionable ? ' step-actionable' : ''}"
+           ${actionable ? `onclick="promptContinue('${cs.key}')" title="Run this stage now on this scan's findings"` : ''}>
         <div class="step-top">
           <div class="step-number">${cs.icon}</div>
           <div class="step-status-pill">${statusLabel}</div>
@@ -1408,6 +1548,7 @@ function renderPipelineStepper(run) {
         <div>
           <div class="step-name">${cs.name}</div>
           <div class="step-note" title="${esc(note)}">${esc(note)}</div>
+          ${actionable ? '<div class="step-run-hint">▶ Click to run this stage</div>' : ''}
         </div>
         <div class="step-progress-bar">
           <div class="step-progress-fill" style="width:${pct}%"></div>
@@ -1423,6 +1564,7 @@ function renderPipelineStepper(run) {
           <span>Pipeline Progress Execution</span>
           ${run.status === 'running' ? '<span style="color:var(--accent);font-weight:700">● LIVE RUN</span>' : ''}
         </div>
+        ${renderRunControls(run)}
         <div style="font-size:12px;color:var(--text-muted)">
           Target: <span class="code-path">${esc(run.target)}</span>
         </div>
@@ -1470,6 +1612,18 @@ function renderStatusBanner(run, s) {
         </div>
         <div style="display:flex;gap:8px">
           <a class="btn ghost sm" href="/api/runs/${run.id}/report" target="_blank">View Standalone Report</a>
+        </div>
+      </div>
+    `;
+  }
+  if (run.status === "stopped") {
+    const where = ((run.stages || []).find(st => st.status === "stopped") || {}).name || "a stage";
+    return `
+      <div class="run-banner banner-failed">
+        <div class="banner-content">
+          <div class="banner-badge badge-stopped">⏹ Scan Stopped</div>
+          <div class="banner-title">You stopped this scan during ${esc(where)}</div>
+          <div class="banner-subtitle">Findings saved up to that point are listed below. Click a Ground or Patch &amp; Verify card to run it now.</div>
         </div>
       </div>
     `;

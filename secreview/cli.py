@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import __version__, tools
 from .config import Config
+from .context import RunStopped
 from .store import Store
 
 
@@ -50,8 +51,13 @@ def cmd_scan(args) -> int:
         print(f"error: {project} is not a directory", file=sys.stderr)
         return 2
     store = _store(cfg)
-    run_id, summary = run_pipeline(cfg, project, store, interactive=not args.yes,
-                                   echo=not args.quiet, ground_enabled=not args.no_ground)
+    try:
+        run_id, summary = run_pipeline(cfg, project, store, interactive=not args.yes,
+                                       echo=not args.quiet, ground_enabled=not args.no_ground)
+    except (RunStopped, KeyboardInterrupt):
+        print("\nscan stopped; findings saved so far are in the dashboard (`secreview continue` can resume "
+              "the Ground / Verify stages)", file=sys.stderr)
+        return 130
     print("\n" + "=" * 60)
     print(f"Run {run_id}")
     print(f"  reportable findings : {summary['reportable']}")
@@ -66,6 +72,29 @@ def cmd_scan(args) -> int:
     if args.open:
         import webbrowser
         webbrowser.open(Path(summary["reports"]["html"]).as_uri())
+    return 0
+
+
+def cmd_continue(args) -> int:
+    from .pipeline import continue_run
+    cfg = _load_config(args)
+    store = _store(cfg)
+    try:
+        summary = continue_run(cfg, store, args.run_id, args.from_stage, interactive=not args.yes,
+                               echo=not args.quiet)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except (RunStopped, KeyboardInterrupt):
+        print("\nstopped", file=sys.stderr)
+        return 130
+    print("\n" + "=" * 60)
+    print(f"Run {args.run_id} continued from {args.from_stage}")
+    print(f"  reportable findings : {summary['reportable']}")
+    print(f"  verified fixed      : {summary['verified_fixed']}")
+    print(f"  needs review        : {summary['needs_review']}")
+    print(f"  discarded (FP)      : {summary['discarded']}")
+    print(f"  report              : {summary['reports'].get('html')}")
     return 0
 
 
@@ -154,6 +183,18 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--open", action="store_true", help="open the HTML report when done")
     common(sp)
     sp.set_defaults(func=cmd_scan)
+
+    sp = sub.add_parser("continue", help="run a skipped stage of a finished run (e.g. Ground after a detect-only scan)")
+    sp.add_argument("run_id", help="run id (see `secreview runs`)")
+    sp.add_argument("--from", dest="from_stage", choices=["ground", "verify"], default="ground",
+                    help="stage to run; every stage after it runs again too (default: ground)")
+    sp.add_argument("--provider", choices=["local", "openrouter", "gemini", "fallback"], help="LLM backend")
+    sp.add_argument("--no-llm", action="store_true", help="deterministic only (no LLM)")
+    sp.add_argument("--sandbox", choices=["docker", "local"], help="verification sandbox")
+    sp.add_argument("--yes", "-y", action="store_true", help="auto-approve all permission prompts")
+    sp.add_argument("--quiet", "-q", action="store_true", help="less console output")
+    common(sp)
+    sp.set_defaults(func=cmd_continue)
 
     sp = sub.add_parser("tools", help="show external tool availability")
     sp.set_defaults(func=cmd_tools)

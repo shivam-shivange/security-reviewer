@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
 
-from ..context import RunContext
+from ..context import RunContext, StageSkipped
 from ..discovery import ProjectInfo, is_test_file
 from ..models import Endpoint, Finding
 from ..taxonomy import enrich
@@ -118,7 +118,12 @@ def run_detect(ctx: RunContext, info: ProjectInfo) -> tuple[list[Finding], list[
         except Exception as exc:   # one broken tool must not stop the scan
             ctx.warn(f"{step} failed: {exc}")
         ctx.log(f"{step}: {len(raw) - before} raw findings")
-        ctx.progress(i, len(steps), step)
+        try:
+            ctx.progress(i, len(steps), step)
+        except StageSkipped:   # keep what the finished tools found; the pipeline jumps to the report
+            ctx.skipped_by_user = "detect"
+            ctx.warn(f"Detect skipped by you after {i} of {len(steps)} tools ({', '.join(steps[i:]) or 'none'} not run)")
+            break
 
     include_tests = cfg.get("scan.include_tests", False)
     kept = []

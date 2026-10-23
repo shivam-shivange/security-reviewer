@@ -180,6 +180,26 @@ Not done: JavaScript/Java LLM-app rules (Python only so far).
   path-traversal verify on Docker/Linux, not Windows local mode (expected).
 
 ## 8. Change log
+- 2026-10-24: **Live Stop / Skip** (user request). A running scan shows "⏭ Skip <stage> → Report" and
+  "⏹ Stop" in the dashboard.
+  - **How it works:** the request is stored on the run (`runs.control`), so CLI scans can be stopped from the
+    dashboard too. Every `ctx.progress()` is a checkpoint; an LLM call in flight finishes first, and a
+    pending permission prompt notices immediately. `RunStopped` / `StageSkipped` derive from BaseException
+    so per-tool `except Exception` guards cannot swallow them.
+  - **Skip:** ends the stage (marked skipped with how far it got) and jumps to the report. Detect keeps the
+    findings of the tools that had finished.
+  - **Stop:** marks the run and stage `stopped`. Ctrl+C in the CLI does the same. Stopped runs can be resumed
+    from Ground / Verify.
+  - **API:** `POST /api/runs/{id}/stop|skip`. A run with no live process (silent for 10 min) is marked stopped
+    at once.
+  - **Timeouts:** `llm.timeout_seconds` is now 90 (cloud); local Qwen has its own 300 s (`llm.local.timeout_seconds`).
+- 2026-10-24: **Continue a finished run from a skipped stage** (user request). In the dashboard, a skipped
+  or failed Ground / Patch & Verify card is clickable: it asks to confirm (LLM, sandbox, optional Verify),
+  then runs that stage and the later ones on the same run, reusing Detect's findings (no rescan).
+  - CLI: `secreview continue <run-id> --from ground|verify`.
+  - The pipeline saves `findings_before_{ground,verify}.json` per run; older runs fall back to `_reset`.
+  - API: `POST /api/runs/{id}/continue`. The scan lock is now set before the worker thread starts.
+  - The writer clears stale patch files when it rewrites a report.
 - 2026-10-24: Ablation (`--no-ground`) fixed: it used to wipe Detect's own decisions (heuristic evidence
   chains -> "none", the constant-command discard revived). Now it skips only Ground's checks.
 - 2026-10-24: Dashboard/report fixes on top of the user's UI redesign:

@@ -108,3 +108,27 @@ def test_ablation_without_ground(flask_app, scratch):
     assert stages["ground"]["status"] == "skipped" and "Ground off" in stages["ground"]["note"]
     assert stages["verify"]["status"] == "skipped" and "Verify off" in stages["verify"]["note"]
     assert stages["detect"]["status"] == "done" and stages["provenance"]["status"] == "done"
+
+
+@pytest.mark.skipif(not tools.which("semgrep"), reason="semgrep not installed")
+def test_continue_runs_a_skipped_ground_stage(flask_app, scratch):
+    """Detect-only scan first, then "run Ground now" on the same run (the dashboard's stage button)."""
+    from secreview.pipeline import continue_run
+    cfg = Config.load()
+    cfg.set("llm.enabled", False)
+    cfg.set("verify.enabled", False)
+    cfg.set("permissions.mode", "auto-approve")
+    cfg.set("paths.workspace", str(scratch / "ws"))
+    store = Store(scratch / "ws" / "db.sqlite")
+    run_id, before = run_pipeline(cfg, flask_app, store, interactive=False, echo=False, ground_enabled=False)
+    assert {s["name"]: s["status"] for s in store.get_run(run_id)["stages"]}["ground"] == "skipped"
+
+    after = continue_run(cfg, store, run_id, "ground", echo=False)
+    run = store.get_run(run_id)
+    stages = {s["name"]: s for s in run["stages"]}
+    assert run["status"] == "done" and stages["ground"]["status"] == "done"
+    assert stages["verify"]["status"] == "skipped" and stages["report"]["status"] == "done"
+    assert run["options"]["ground_enabled"] is True and run["options"]["continued"][0]["from"] == "ground"
+    # Ground really ran: no finding still carries the ablation placeholder evidence
+    assert not [f for f in store.findings(run_id) if f.evidence and "ablation" in f.evidence.summary]
+    assert after["reportable"] <= before["reportable"]

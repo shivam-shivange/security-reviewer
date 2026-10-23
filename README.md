@@ -60,6 +60,7 @@ secreview llm --test       # check the configured LLM backend
 secreview runs             # list past runs
 secreview report --open    # open the latest HTML report
 secreview dashboard        # live web dashboard
+secreview continue <run-id> --from ground   # run a skipped stage (ground | verify) on a finished run
 
 .\.venv\Scripts\python.exe -m secreview.cli dashboard  # start the project
 ```

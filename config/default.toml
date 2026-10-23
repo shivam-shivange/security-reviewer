@@ -7,13 +7,14 @@ provider = "fallback"         # local | openrouter | gemini | fallback (tries fa
 fallback_order = ["openrouter", "gemini", "local"]   # most accurate first; local last (slow, private)
 fallback_cooldown_seconds = 300   # skip a provider this long after it fails (e.g. free quota used up)
 temperature = 0.1
-timeout_seconds = 300          # local 4B models on CPU need ~2-3 min per call
+timeout_seconds = 90           # per call; cloud models answer in seconds, so a hung call fails over fast
 max_retries = 2
 cache = true                  # cache responses by prompt hash; repeat scans cost nothing
 
 [llm.local]
 host = "http://localhost:11434"
 model = "qwen3.5:4b"             # models chosen by the 2026-10-23 bake-off: see docs/llm_models.md
+timeout_seconds = 300            # overrides llm.timeout_seconds: a 4B model on CPU needs ~2-3 min per call
 
 [llm.openrouter]
 base_url = "https://openrouter.ai/api/v1"
