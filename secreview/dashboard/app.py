@@ -34,6 +34,9 @@ def create_app(cfg: Config):
     for r in store.list_runs(200):
         if r["status"] == "running":
             store.update_run(r["id"], status="failed", error="interrupted (dashboard restarted)")
+            for st in store.get_run(r["id"])["stages"]:
+                if st["status"] in ("running", "pending"):
+                    store.stage(r["id"], st["name"], "failed", note="interrupted (dashboard restarted)")
 
     @app.get("/", response_class=HTMLResponse)
     def index():
