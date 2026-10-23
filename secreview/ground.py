@@ -20,6 +20,7 @@ from .llm.base import LLMError
 from .llm.gate import LLMGate
 from .models import Evidence, EvidenceStep, Finding, Status
 from .slicer import get_slice
+from .redact import llm_allowed
 from .taxonomy import is_heuristic
 
 PROMPT = (ROOT / "prompts" / "ground.md").read_text(encoding="utf-8")
@@ -83,6 +84,8 @@ def validate_chain(ctx: RunContext, f: Finding, chain: list[dict], slice_) -> tu
 
 def llm_ground(ctx: RunContext, gate: LLMGate, f: Finding) -> bool:
     """Returns True when the LLM produced a decision (finding status updated)."""
+    if not llm_allowed(f):
+        return False   # secrets and secret files never go to an LLM
     llm = gate.client()
     if llm is None:
         return False

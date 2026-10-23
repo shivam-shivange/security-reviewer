@@ -1367,7 +1367,7 @@ function renderRunControls(run) {
   const ctl = run.control || "";
   if (ctl) {
     const what = ctl === "stop" ? "Stop requested" : `Skip of ${ctl.split(":")[1]} requested`;
-    return `<div class="run-controls"><span class="pending">⏳ ${esc(what)}: takes effect at the next checkpoint (an LLM call in flight finishes first)</span></div>`;
+    return `<div class="run-controls"><span class="pending">⏳ ${esc(what)}: applying now…</span></div>`;
   }
   const stage = run.stage || "";
   const skip = SKIPPABLE_STAGES.includes(stage)
@@ -1396,8 +1396,8 @@ function skipStage() {
 }
 
 // --- Continue a finished run from a skipped stage (Ground / Patch & Verify) ---
-const CONTINUABLE_STAGES = ["ground", "verify"];
-const STAGE_TITLES = { ground: "4. Ground", verify: "5. Patch & Verify" };
+const CONTINUABLE_STAGES = ["ground", "verify", "report"];
+const STAGE_TITLES = { ground: "4. Ground", verify: "5. Patch & Verify", report: "6. Report" };
 
 function promptContinue(stage) {
   state.continuePrompt = { stage, error: "" };
@@ -1413,6 +1413,19 @@ function renderContinuePrompt(run) {
   const cp = state.continuePrompt;
   if (!cp || !run || run.status === "running") return "";
   const n = (state.findings || []).length;
+  if (cp.stage === "report") {
+    return `
+    <div class="continue-panel">
+      <div style="font-weight:700;font-size:14px">Generate the report now?</div>
+      <div style="font-size:12.5px;color:var(--text-secondary)">Writes report.html and report.json from the ${n} findings exactly as they are.
+        Nothing else runs: no LLM, no sandbox. Stages that did not finish keep their status and can still be run later.</div>
+      ${cp.error ? `<div style="color:var(--bad);font-size:12.5px">${esc(cp.error)}</div>` : ''}
+      <div style="display:flex;gap:8px">
+        <button class="btn primary sm" onclick="confirmContinue()">📄 Generate report</button>
+        <button class="btn ghost sm" onclick="cancelContinue()">Cancel</button>
+      </div>
+    </div>`;
+  }
   const then = cp.stage === "ground"
     ? "Ground checks each finding for evidence (the LLM is asked only about ambiguous ones). Then Patch &amp; Verify and Report run again."
     : "Patch &amp; Verify builds patches for the grounded findings and, if the sandbox is on, proves them by running the exploit. Then Report runs again.";
@@ -1451,13 +1464,13 @@ async function confirmContinue() {
   const cp = state.continuePrompt;
   if (!cp || !state.runId) return;
   const provider = $("#contProvider")?.value ?? "fallback";
-  const options = {
+  const options = cp.stage === "report" ? {} : {
     "llm.enabled": !!provider,
     "verify.sandbox": $("#contSandbox")?.value ?? "docker",
     "verify.enabled": cp.stage === "verify" ? true : !!$("#contVerify")?.checked,
     "permissions.mode": "ask"
   };
-  if (provider) options["llm.provider"] = provider;
+  if (provider && cp.stage !== "report") options["llm.provider"] = provider;
   try {
     const res = await fetch(`/api/runs/${state.runId}/continue`, {
       method: "POST",
@@ -1625,6 +1638,7 @@ function renderStatusBanner(run, s) {
           <div class="banner-title">You stopped this scan during ${esc(where)}</div>
           <div class="banner-subtitle">Findings saved up to that point are listed below. Click a Ground or Patch &amp; Verify card to run it now.</div>
         </div>
+        <button class="btn primary sm" onclick="promptContinue('report')">📄 Generate report now</button>
       </div>
     `;
   }
@@ -1634,8 +1648,9 @@ function renderStatusBanner(run, s) {
         <div class="banner-content">
           <div class="banner-badge badge-failed">✕ Scan Interrupted / Failed</div>
           <div class="banner-title">Pipeline Failed: ${esc(run.error || "Execution terminated unexpectedly")}</div>
-          <div class="banner-subtitle">Check the event log tab below for stack traces and error diagnostics.</div>
+          <div class="banner-subtitle">Check the event log tab below for error details. The findings saved so far are listed below.</div>
         </div>
+        <button class="btn primary sm" onclick="promptContinue('report')">📄 Generate report now</button>
       </div>
     `;
   }
@@ -1656,9 +1671,11 @@ function renderPriorityKPIs(s) {
     else p4++;
   });
 
-  const verified = s.verified_fixed || 0;
-  const needsReview = s.needs_review || 0;
-  const discarded = s.discarded || 0;
+  // counted from the findings: a run that never reached its Report stage has no summary
+  const byStatus = st => (state.findings || []).filter(f => f.status === st).length;
+  const verified = byStatus("verified_fixed");
+  const needsReview = byStatus("needs_review");
+  const discarded = byStatus("discarded");
 
   return `
     <div class="kpi-grid">

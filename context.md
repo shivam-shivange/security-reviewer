@@ -180,6 +180,19 @@ Not done: JavaScript/Java LLM-app rules (Python only so far).
   path-traversal verify on Docker/Linux, not Windows local mode (expected).
 
 ## 8. Change log
+- 2026-10-24: **Secrets kept out of LLM prompts** (`secreview/redact.py`).
+  - **Masking:** every prompt is masked in `LLMClient.complete`. It covers known key formats (from
+    `rules/secrets.yaml`), private keys, credentialed URIs, quoted secret literals and `.env`-style lines.
+  - **Exclusion:** secret findings and secret files (`.env*`, `*.pem`, `secrets.*`...) are never sent
+    (`llm_allowed`). Deterministic fixes still apply to them.
+  - **Why:** before this, LLM patch requests read raw slices, so `.env` values could reach the cloud. In
+    both affected scans (AI-Interviewer-Bot, and this repo scanned at 02:07) the `.env` findings were not
+    reached before the run was stopped; the cached answers confirm no key appeared.
+  - **Empty LLM replies** now count as provider failures, so the fallback cools that provider down.
+- 2026-10-24: **Stop / Skip act immediately.** LLM calls run in a thread polled every 0.5 s and are abandoned
+  on Stop / Skip; retry pauses are interruptible. Detect-only Patch & Verify gained per-finding checkpoints
+  (it had none, so Skip waited for the whole stage). Sandbox subprocesses (Verify with oracles) are still
+  checked only between findings.
 - 2026-10-24: **Live Stop / Skip** (user request). A running scan shows "⏭ Skip <stage> → Report" and
   "⏹ Stop" in the dashboard.
   - **How it works:** the request is stored on the run (`runs.control`), so CLI scans can be stopped from the

@@ -186,8 +186,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("continue", help="run a skipped stage of a finished run (e.g. Ground after a detect-only scan)")
     sp.add_argument("run_id", help="run id (see `secreview runs`)")
-    sp.add_argument("--from", dest="from_stage", choices=["ground", "verify"], default="ground",
-                    help="stage to run; every stage after it runs again too (default: ground)")
+    sp.add_argument("--from", dest="from_stage", choices=["ground", "verify", "report"], default="ground",
+                    help="stage to run; every stage after it runs again too. `report` only writes the report "
+                         "from the findings as they are (default: ground)")
     sp.add_argument("--provider", choices=["local", "openrouter", "gemini", "fallback"], help="LLM backend")
     sp.add_argument("--no-llm", action="store_true", help="deterministic only (no LLM)")
     sp.add_argument("--sandbox", choices=["docker", "local"], help="verification sandbox")

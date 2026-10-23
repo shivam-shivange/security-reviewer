@@ -133,12 +133,14 @@ def _verify_dependency(ctx: RunContext, f: Finding, runner: Runner) -> None:
 
 def run_verify(ctx: RunContext, findings: list[Finding], gate: LLMGate) -> None:
     if not ctx.config.get("verify.enabled", True):
-        for f in findings:
-            if f.status == Status.GROUNDED.value:
-                cands = candidates(ctx, gate, f)
-                if cands:
-                    f.recommended_patch = cands[0]
-                _unverified(f, "verify stage disabled")
+        targets = [f for f in findings if f.status == Status.GROUNDED.value]
+        for i, f in enumerate(targets, 1):
+            cands = candidates(ctx, gate, f)
+            if cands:
+                f.recommended_patch = cands[0]
+            _unverified(f, "verify stage disabled")
+            ctx.store.save_finding(ctx.run_id, f)
+            ctx.progress(i, len(targets), f"recommended patches: {i}/{len(targets)}")
         return
     targets = [f for f in findings if f.status == Status.GROUNDED.value]
     if not targets:

@@ -11,6 +11,7 @@ from __future__ import annotations
 from ..context import RunContext
 from ..llm.gate import LLMGate
 from ..models import Finding, Patch, Status
+from ..redact import llm_allowed
 from . import config_fixers, java_fixers, js_fixers, py_fixers  # noqa: F401  (register templates)
 from .base import FixContext, fixers_for, make_patch, syntax_ok
 from .dependency import bump
@@ -74,8 +75,8 @@ def candidates(ctx: RunContext, gate: LLMGate, f: Finding, feedback: str = "",
                 out.append(p)
             if ctx.config.get("patch.templates", True):
                 out += template_patches(ctx, f)
-    if allow_llm and ctx.config.get("patch.llm_fallback", True) and f.vuln_class != "vulnerable_dependency" \
-            and (feedback or not out):
+    if allow_llm and llm_allowed(f) and ctx.config.get("patch.llm_fallback", True) \
+            and f.vuln_class != "vulnerable_dependency" and (feedback or not out):
         llm = gate.client()
         if llm is not None:
             out += llm_candidates(ctx, llm, f, feedback, int(ctx.config.get("patch.candidates", 2)))
@@ -91,7 +92,7 @@ def candidates(ctx: RunContext, gate: LLMGate, f: Finding, feedback: str = "",
 def recommend_general_bug(ctx: RunContext, gate: LLMGate, f: Finding) -> None:
     """General bugs: deterministic linter fixes are attached by the linters; the LLM recommended patch
     is implemented but only runs when general_bugs.llm_patch = true (disabled by default)."""
-    if f.recommended_patch or not ctx.config.get("general_bugs.llm_patch", False):
+    if f.recommended_patch or not ctx.config.get("general_bugs.llm_patch", False) or not llm_allowed(f):
         return
     llm = gate.client()
     if llm is None:

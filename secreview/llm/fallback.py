@@ -25,6 +25,16 @@ class FallbackClient(LLMClient):
         self.last_member: LLMClient | None = None
 
     @property
+    def interrupt(self):
+        return self._interrupt
+
+    @interrupt.setter
+    def interrupt(self, hook) -> None:
+        self._interrupt = hook
+        for m in getattr(self, "members", []):
+            m.interrupt = hook
+
+    @property
     def is_cloud(self) -> bool:
         return any(m.is_cloud for m in self.members)
 

@@ -46,6 +46,7 @@ class LLMGate:
                 self._ok = False
                 return None
         self.ctx.log(f"LLM ready: {status}")
+        self._client.interrupt = self.ctx.check_control   # Stop / Skip interrupt a call in flight
         self._ok = True
         return self._client
 

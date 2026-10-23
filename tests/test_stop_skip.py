@@ -100,3 +100,41 @@ def test_stale_skip_for_another_stage_is_ignored(setup, monkeypatch):
     monkeypatch.setattr(pipeline, "run_ground", ground)
     run_id, _ = pipeline.run_pipeline(cfg, project, store, echo=False)
     assert _stages(store, run_id)["ground"]["status"] == "done"
+
+
+def test_generate_report_for_a_stopped_run(setup, monkeypatch):
+    """A run stopped (or interrupted) before Report gets its report without re-running anything."""
+    cfg, project, store = setup
+    monkeypatch.setattr(engine, "scan_secrets", lambda ctx: [_finding(i) for i in range(1, 4)])
+
+    def ground(ctx, findings, gate, enabled=True):
+        ctx.store.request_control(ctx.run_id, "stop")
+        ctx.progress(1, len(findings))
+    monkeypatch.setattr(pipeline, "run_ground", ground)
+    with pytest.raises(RunStopped):
+        pipeline.run_pipeline(cfg, project, store, echo=False)
+    run_id = store.list_runs(1)[0]["id"]
+
+    summary = pipeline.continue_run(cfg, store, run_id, "report", echo=False)
+    stages = _stages(store, run_id)
+    assert store.get_run(run_id)["status"] == "done" and stages["report"]["status"] == "done"
+    assert stages["ground"]["status"] == "stopped"          # report-only: earlier stages keep their status
+    assert summary["total_findings"] == 3 and Path(summary["reports"]["html"]).is_file()
+
+
+def test_skip_during_detect_only_verify_is_immediate(setup, monkeypatch):
+    """Detect-only Patch & Verify used to have no checkpoint, so Skip waited for the whole stage."""
+    import secreview.verify.engine as verify_engine
+    cfg, project, store = setup
+    monkeypatch.setattr(engine, "scan_secrets", lambda ctx: [_finding(i) for i in range(1, 6)])
+    calls = []
+
+    def candidates(ctx, gate, f, **kw):
+        calls.append(f.line)
+        ctx.store.request_control(ctx.run_id, "skip:verify")   # pressed while the first patch is written
+        return []
+    monkeypatch.setattr(verify_engine, "candidates", candidates)
+    run_id, _ = pipeline.run_pipeline(cfg, project, store, echo=False)
+    assert len(calls) == 1                                      # stopped after the first finding
+    stages = _stages(store, run_id)
+    assert stages["verify"]["status"] == "skipped" and stages["report"]["status"] == "done"

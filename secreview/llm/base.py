@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 from abc import ABC, abstractmethod
 
+from ..redact import redact
 from .cache import LLMCache
 
 
@@ -50,6 +52,9 @@ class LLMClient(ABC):
         self.cache = cache
         self.calls = 0          # real (non-cached) calls made in this process
         self.cache_hits = 0
+        # Called about every half second while a request is in flight; it raises to abandon the call
+        # (the dashboard's Stop / Skip). Set by the LLM gate for pipeline runs.
+        self.interrupt = None
 
     @abstractmethod
     def _complete(self, system: str, prompt: str, json_mode: bool, temperature: float) -> str:
@@ -61,6 +66,8 @@ class LLMClient(ABC):
 
     def complete(self, system: str, prompt: str, json_mode: bool = True,
                  temperature: float | None = None, use_cache: bool = True) -> str:
+        # every prompt leaves through here: mask keys / passwords whichever stage built it
+        system, prompt = redact(system), redact(prompt)
         temp = self.temperature if temperature is None else temperature
         key = None
         if self.cache and use_cache:
@@ -73,7 +80,11 @@ class LLMClient(ABC):
         for attempt in range(self.max_retries + 1):
             try:
                 self.calls += 1
-                out = self._complete(system, prompt, json_mode, temp)
+                out = self._interruptible(lambda: self._complete(system, prompt, json_mode, temp))
+                if not (out or "").strip():
+                    # an empty answer means the provider is failing (often a used-up free quota), not
+                    # that the question was bad: retry, then let a fallback chain move on
+                    raise LLMError(f"{self.provider} returned an empty response")
                 if self.cache and key:
                     self.cache.put(key, out)
                 return out
@@ -81,8 +92,37 @@ class LLMClient(ABC):
                 raise
             except Exception as exc:  # network errors, 5xx, rate limits
                 last = exc
-                time.sleep(min(2 ** attempt * 2, 20))
+                self._pause(min(2 ** attempt * 2, 20))
         raise LLMError(f"{self.provider} failed after retries: {last}")
+
+    def _interruptible(self, call):
+        """Run a blocking request; while it is in flight, poll `interrupt` so Stop / Skip act at once.
+        An abandoned request finishes in its daemon thread and its answer is dropped."""
+        if self.interrupt is None:
+            return call()
+        box: dict = {}
+
+        def worker():
+            try:
+                box["out"] = call()
+            except BaseException as exc:   # handed to the caller below
+                box["err"] = exc
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        while t.is_alive():
+            t.join(0.5)
+            if t.is_alive():
+                self.interrupt()
+        if "err" in box:
+            raise box["err"]
+        return box["out"]
+
+    def _pause(self, seconds: float) -> None:
+        end = time.time() + seconds
+        while time.time() < end:
+            time.sleep(min(0.5, max(end - time.time(), 0)))
+            if self.interrupt is not None:
+                self.interrupt()
 
     def complete_json(self, system: str, prompt: str, temperature: float | None = None,
                       use_cache: bool = True) -> dict | list:

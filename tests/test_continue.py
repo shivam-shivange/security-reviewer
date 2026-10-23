@@ -41,5 +41,5 @@ def test_reset_before_verify_returns_findings_to_grounded():
     assert review.status == Status.NEEDS_REVIEW.value
 
 
-def test_only_ground_and_verify_can_be_continued():
-    assert CONTINUABLE == ("ground", "verify")
+def test_continuable_stages():
+    assert CONTINUABLE == ("ground", "verify", "report")

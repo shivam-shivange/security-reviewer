@@ -43,7 +43,7 @@ def _summary(findings: list[Finding], endpoints: list, elapsed: float, gate: LLM
 
 
 # A finished run can be continued from these stages (e.g. run Ground after a detect-only scan).
-CONTINUABLE = ("ground", "verify")
+CONTINUABLE = ("ground", "verify", "report")   # "report": write the report now, nothing else runs
 TAIL = ("ground", "verify", "report")
 
 
@@ -141,6 +141,11 @@ def _run_tail(ctx: RunContext, gate: LLMGate, info, findings: list[Finding], end
             ctx.warn("Patch & Verify skipped by you; going straight to the report")
 
     # 5. Report
+    return _report(ctx, gate, info, findings, endpoints, start)
+
+
+def _report(ctx: RunContext, gate: LLMGate, info, findings: list[Finding], endpoints: list, start: float) -> dict:
+    store, run_id = ctx.store, ctx.run_id
     ctx.stage_start("report")
     findings.sort(key=lambda f: (SEVERITY_ORDER.get(f.severity, 9), f.status))
     for f in findings:
@@ -249,18 +254,23 @@ def continue_run(config: Config, store: Store, run_id: str, from_stage: str, *, 
     options.setdefault("continued", []).append({"from": from_stage, "at": time.strftime("%Y-%m-%d %H:%M:%S")})
     if from_stage == "ground":
         options["ground_enabled"] = True
-    options["verify_enabled"] = bool(config.get("verify.enabled", True))
+    if from_stage != "report":
+        options["verify_enabled"] = bool(config.get("verify.enabled", True))
     store.update_run(run_id, status="running", stage=from_stage, finished=None, error="", options=options)
     store.clear_control(run_id)
     for name in TAIL[TAIL.index(from_stage):]:
-        store.stage(run_id, name, "pending", note="queued: re-running")
+        store.stage(run_id, name, "pending", note="queued: re-running" if from_stage != "report"
+                    else "queued: writing the report")
     try:
         ctx.stage_name = from_stage
         ctx.log(f"continuing run from the {from_stage} stage")
         info = discover(project, config.get("scan.exclude", []), config.get("scan.max_file_kb", 1024))
         ctx.verify_info = info
-        findings = _restore(ctx, from_stage, store.findings(run_id))
         endpoints = [Endpoint(**d) for d in store.endpoints(run_id)]
+        if from_stage == "report":
+            # report the findings exactly as they are now; earlier stages keep their status
+            return _report(ctx, gate, info, store.findings(run_id), endpoints, start)
+        findings = _restore(ctx, from_stage, store.findings(run_id))
         return _run_tail(ctx, gate, info, findings, endpoints, start, from_stage, ground_enabled=True)
     except (RunStopped, KeyboardInterrupt):   # Stop button, or Ctrl+C in the terminal
         _stopped(ctx)
