@@ -70,23 +70,36 @@ def run_pipeline(config: Config, project: Path, store: Store, *, interactive: bo
         ctx.stage_end("done", done=len(findings), total=len(findings), note=f"{len(findings)} findings")
 
         # provenance (git blame)
+        ctx.stage_start("provenance")
         if (project / ".git").exists():
-            ctx.stage_start("provenance")
             n = annotate(project, findings)
             ctx.stage_end("done", note=f"annotated {n} findings")
+        else:
+            ctx.stage_end("skipped", note="not a git repository root: no blame annotation")
+
+        def count(status: Status) -> int:
+            return sum(1 for f in findings if f.status == status.value)
 
         # 3. Ground
         ctx.stage_start("ground", total=len(findings))
         run_ground(ctx, findings, gate, enabled=ground_enabled)
-        grounded = sum(1 for f in findings if f.status == Status.GROUNDED.value)
-        ctx.stage_end("done", note=f"{grounded} grounded, "
-                      f"{sum(1 for f in findings if f.status == Status.DISCARDED.value)} discarded")
+        if ground_enabled:
+            ctx.stage_end("done", note=f"{count(Status.GROUNDED)} grounded, {count(Status.NEEDS_REVIEW)} need review, "
+                                       f"{count(Status.DISCARDED)} discarded")
+        else:
+            ctx.stage_end("skipped", note=f"Ground off (ablation): {count(Status.GROUNDED)} findings passed on "
+                                          "without evidence checks")
 
         # 4. Patch + Verify
-        ctx.stage_start("verify", total=sum(1 for f in findings if f.status == Status.GROUNDED.value))
+        ctx.stage_start("verify", total=count(Status.GROUNDED))
         run_verify(ctx, findings, gate)
         run_patch_recommendations(ctx, gate, findings)
-        ctx.stage_end("done", note=f"{sum(1 for f in findings if f.status == Status.VERIFIED_FIXED.value)} verified")
+        outcome = (f"{count(Status.VERIFIED_FIXED)} verified, {count(Status.PATCH_UNVERIFIED)} patch unverified, "
+                   f"{count(Status.REPORT_ONLY)} report only")
+        if config.get("verify.enabled", True):
+            ctx.stage_end("done", note=outcome)
+        else:
+            ctx.stage_end("skipped", note=f"Verify off (detection only): patches recommended, none executed; {outcome}")
 
         # 5. Report
         ctx.stage_start("report")

@@ -41,6 +41,35 @@ def create_app(cfg: Config):
     def runs():
         return store.list_runs(100)
 
+    @app.get("/api/presets")
+    def presets():
+        from .. import ROOT
+        items = []
+        p_flask = (ROOT / "examples" / "flask-vuln").resolve()
+        if p_flask.exists():
+            items.append({
+                "id": "flask-vuln",
+                "name": "Flask Vulnerable Web App",
+                "path": str(p_flask),
+                "badge": "Web Exploits",
+                "desc": "SQLi, XSS, Open Redirect, Path Traversal, and vulnerable dependencies."
+            })
+        p_ai = (ROOT / "examples" / "llm-streamlit-vuln").resolve()
+        if p_ai.exists():
+            items.append({
+                "id": "llm-streamlit-vuln",
+                "name": "Streamlit AI & LLM App",
+                "path": str(p_ai),
+                "badge": "AI / OWASP LLM",
+                "desc": "Prompt Injection, RAG Poisoning, Improper LLM Output Handling, and Unbounded LLM Consumption."
+            })
+        return items
+
+    @app.get("/api/tools")
+    def tool_status():
+        from .. import tools
+        return tools.status()
+
     @app.get("/api/runs/{run_id}")
     def run(run_id: str):
         r = store.get_run(run_id)

@@ -3,271 +3,2166 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>secreview dashboard</title>
+<title>secreview — Self-Verifying AI Security Reviewer</title>
 <style>
-:root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#2f81f7;
---ok:#3fb950;--warn:#d29922;--bad:#f85149;--purple:#a371f7}
-*{box-sizing:border-box}
-body{margin:0;font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
-a{color:var(--accent);text-decoration:none}
-header{background:#010409;border-bottom:1px solid var(--line);padding:10px 20px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:10}
-header h1{font-size:16px;margin:0;font-weight:600}
-header .sub{color:var(--muted);font-size:12px}
-.layout{display:flex;height:calc(100vh - 49px)}
-.sidebar{width:300px;border-right:1px solid var(--line);overflow-y:auto;flex-shrink:0;background:var(--panel)}
-.main{flex:1;overflow-y:auto;padding:18px 22px}
-.newscan{padding:12px;border-bottom:1px solid var(--line)}
-.newscan input,.newscan select{width:100%;background:#0d1117;border:1px solid var(--line);color:var(--text);border-radius:6px;padding:7px 9px;margin:4px 0;font-size:13px}
-.btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:7px 12px;cursor:pointer;font-size:13px;font-weight:500}
-.btn:hover{filter:brightness(1.1)} .btn.sm{padding:3px 9px;font-size:12px}
-.btn.ok{background:var(--ok)} .btn.bad{background:var(--bad)} .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
-.runrow{padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12px}
-.runrow:hover{background:#1c2128} .runrow.active{background:#1f6feb22;border-left:3px solid var(--accent)}
-.runrow .id{font-family:ui-monospace,Consolas,monospace;font-size:11px}
-.runrow .meta{color:var(--muted);margin-top:2px}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
-.d-running{background:var(--accent);animation:pulse 1s infinite} .d-done{background:var(--ok)}
-.d-failed{background:var(--bad)}
-@keyframes pulse{50%{opacity:.3}}
-.stages{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 18px}
-.stage{flex:1;min-width:120px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
-.stage .name{font-weight:600;text-transform:capitalize}
-.stage .bar{height:5px;background:#0d1117;border-radius:3px;margin-top:7px;overflow:hidden}
-.stage .fill{height:100%;background:var(--accent);transition:width .3s}
-.stage.done .fill{background:var(--ok)} .stage.running .name:after{content:" ·";animation:pulse 1s infinite}
-.stage .note{color:var(--muted);font-size:11px;margin-top:5px;min-height:14px}
-.tiles{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
-.tile{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 16px;min-width:92px}
-.tile .n{font-size:22px;font-weight:700} .tile .l{color:var(--muted);font-size:11px}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px}
-.tab{padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);font-size:13px}
-.tab.active{color:var(--text);border-bottom-color:var(--accent)}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px}
-.chead{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.sev{color:#fff;border-radius:4px;padding:1px 7px;font-size:10px;text-transform:uppercase;font-weight:700}
-.sev-critical{background:#b3123b}.sev-high{background:#d9480f}.sev-medium{background:#9e6a03}.sev-low{background:#1f6feb}.sev-info{background:#555}
-.pill{border-radius:10px;padding:1px 9px;font-size:11px;font-weight:600}
-.st-verified_fixed{background:#1a7f3733;color:var(--ok)}.st-patch_unverified{background:#9a670033;color:var(--warn)}
-.st-needs_review{background:#8250df33;color:var(--purple)}.st-discarded{background:#8b949e22;color:var(--muted)}
-.st-report_only{background:#30363d;color:var(--muted)}.st-grounded{background:#1f6feb22;color:var(--accent)}
-.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
-.muted{color:var(--muted)} .loc{font-size:12px;margin:6px 0}
-details{margin-top:8px} summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--muted)}
-table{border-collapse:collapse;width:100%;font-size:12px;margin-top:6px}
-th,td{border:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
-th{color:var(--muted);font-weight:600}
-.diff{font-family:ui-monospace,Consolas,monospace;font-size:12px;border:1px solid var(--line);border-radius:6px;overflow:auto;margin-top:6px}
-.diff div{padding:0 8px;white-space:pre}.diff .add{background:#1a7f3722}.diff .del{background:#f8514922}.diff .hunk{background:#1f6feb22;color:var(--accent)}
-.log{background:#010409;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;max-height:320px;overflow-y:auto}
-.log .l-warn{color:var(--warn)}.log .l-error{color:var(--bad)}.log .ts{color:var(--muted)}
-.perm{background:#9a670018;border:1px solid var(--warn);border-radius:8px;padding:10px 12px;margin-bottom:10px}
-.perm .acts{margin-top:8px;display:flex;gap:8px}
-.empty{color:var(--muted);text-align:center;padding:40px}
-.filterbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-.chip{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:14px;padding:3px 11px;cursor:pointer;font-size:12px}
-.chip.active{background:var(--accent);border-color:var(--accent)}
-.route{color:var(--accent)} .badge-auth{color:var(--ok)}.badge-open{color:var(--bad)}
+:root {
+  --bg: #090d16;
+  --bg-subtle: #0d121f;
+  --panel: #111827;
+  --panel-elevated: #162032;
+  --panel-hover: #1b263b;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --text: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #3b82f6;
+  --accent-glow: rgba(59, 130, 246, 0.25);
+  --accent-light: #60a5fa;
+  --ok: #10b981;
+  --ok-glow: rgba(16, 185, 129, 0.2);
+  --warn: #f59e0b;
+  --warn-glow: rgba(245, 158, 11, 0.2);
+  --bad: #ef4444;
+  --bad-glow: rgba(239, 68, 68, 0.25);
+  --purple: #8b5cf6;
+  --cyan: #06b6d4;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 13.5px/1.55 var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent-light); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.24); }
+
+/* Header */
+header {
+  background: rgba(9, 13, 22, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 22px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-icon {
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 0 16px rgba(37, 99, 235, 0.4);
+}
+header h1 {
+  font-size: 15px;
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+header .tagline {
+  color: var(--text-muted);
+  font-size: 12px;
+  border-left: 1px solid var(--line);
+  padding-left: 12px;
+}
+.header-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.status-indicator {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 4px 10px; border-radius: 20px;
+  border: 1px solid var(--line);
+}
+
+/* Layout */
+.layout { display: flex; height: calc(100vh - 51px); }
+.sidebar {
+  width: 320px;
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  flex-shrink: 0;
+  background: var(--bg-subtle);
+  display: flex;
+  flex-direction: column;
+}
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 28px 48px;
+  background: radial-gradient(circle at 80% 0%, rgba(37, 99, 235, 0.05), transparent 40%),
+              radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.03), transparent 30%);
+}
+
+/* Sidebar Sections */
+.sidebar-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.sidebar-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.run-list { flex: 1; overflow-y: auto; }
+.runrow {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  font-size: 12.5px;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.runrow:hover { background: var(--panel); }
+.runrow.active {
+  background: rgba(59, 130, 246, 0.12);
+  border-left: 3px solid var(--accent);
+}
+.runrow .id {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.runrow .meta {
+  color: var(--text-secondary);
+  margin-top: 4px;
+  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Pulsing Status Dot */
+.dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.d-running { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 1.2s infinite; }
+.d-done { background: var(--ok); box-shadow: 0 0 6px var(--ok-glow); }
+.d-failed { background: var(--bad); }
+@keyframes pulse { 0% { opacity: 0.3; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.15); } 100% { opacity: 0.3; transform: scale(0.9); } }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* Buttons */
+.btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn.sm { padding: 4px 10px; font-size: 12px; }
+.btn.primary { background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 0 16px rgba(37, 99, 235, 0.3); }
+.btn.ok { background: var(--ok); color: #022c22; font-weight: 700; }
+.btn.bad { background: var(--bad); }
+.btn.ghost {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  box-shadow: none;
+}
+.btn.ghost:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.25); }
+
+/* Config / Scan Drawer or Modal */
+.config-panel {
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 22px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  animation: slideDown 0.2s ease-out;
+}
+@keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+.config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+.config-header h3 { margin: 0; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+
+.form-group { margin-bottom: 14px; }
+.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.form-control {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+.form-control:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.preset-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.preset-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  color: var(--text-secondary);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11.5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+.preset-btn:hover {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.feature-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.feature-card:hover { border-color: rgba(255, 255, 255, 0.2); background: #0f1422; }
+.feature-card input[type="checkbox"] { margin-top: 3px; cursor: pointer; accent-color: var(--accent); }
+.feature-info { flex: 1; }
+.feature-title { font-weight: 600; font-size: 12.5px; color: var(--text); }
+.feature-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+
+/* Active Run Status Banner */
+.run-banner {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.15), rgba(124, 58, 237, 0.1));
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.run-banner.banner-running {
+  border-color: var(--accent);
+  box-shadow: 0 0 24px rgba(59, 130, 246, 0.2);
+}
+.run-banner.banner-running::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -100%; width: 200%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: sweep 2.5s infinite linear;
+}
+@keyframes sweep { from { transform: translateX(0); } to { transform: translateX(50%); } }
+
+.run-banner.banner-done {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(6, 182, 212, 0.08));
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.run-banner.banner-failed {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(185, 28, 28, 0.08));
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.banner-content { display: flex; flex-direction: column; gap: 4px; }
+.banner-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 4px; width: fit-content;
+}
+.banner-badge.badge-running { background: rgba(59, 130, 246, 0.25); color: var(--accent-light); }
+.banner-badge.badge-done { background: rgba(16, 185, 129, 0.25); color: var(--ok); }
+.banner-badge.badge-failed { background: rgba(239, 68, 68, 0.25); color: var(--bad); }
+.banner-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.banner-subtitle { font-size: 12.5px; color: var(--text-secondary); }
+
+/* Clear Pipeline Stepper Indicator */
+.stepper-container {
+  margin-bottom: 24px;
+}
+.stepper-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.stepper-header-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stages-track {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.stage-step {
+  flex: 1;
+  min-width: 140px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  position: relative;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.stage-step.step-running {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.12), var(--panel));
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.25);
+}
+.stage-step.step-done {
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.stage-step.step-failed {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.stage-step.step-skipped {
+  border-style: dashed;
+  border-color: rgba(245, 158, 11, 0.45);
+  opacity: 0.8;
+}
+.step-skipped .step-status-pill { background: rgba(245, 158, 11, 0.14); color: var(--warn); }
+.step-skipped .step-progress-fill { background: transparent; }
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; }
+.filter-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px;
+  background: rgba(59, 130, 246, 0.14); border: 1px solid rgba(59, 130, 246, 0.4); color: var(--text); cursor: pointer; font-size: 12px; }
+.filter-chip:hover { border-color: var(--bad); }
+.filter-clear { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; text-decoration: underline; }
+.stage-step.step-pending {
+  opacity: 0.6;
+}
+
+.step-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.step-number {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.step-running .step-number {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 10px var(--accent);
+}
+.step-done .step-number {
+  background: var(--ok);
+  color: #022c22;
+}
+
+.step-status-pill {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.step-running .step-status-pill {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--accent-light);
+}
+.step-done .step-status-pill {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--ok);
+}
+.step-pending .step-status-pill {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+}
+
+.step-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.step-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-height: 15px;
+  line-height: 1.35;
+}
+.step-progress-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+.step-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.step-running .step-progress-fill {
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  animation: pulseFill 1.5s infinite;
+}
+@keyframes pulseFill { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
+.step-done .step-progress-fill { background: var(--ok); }
+
+/* Priority KPI Grid */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.kpi-tile {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-tile:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  background: var(--panel-elevated);
+}
+.kpi-tile.active-kpi {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+}
+.kpi-tile .num {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+}
+.kpi-tile .lbl {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Tabs */
+.tabs-nav {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 18px;
+}
+.tab-btn {
+  padding: 10px 18px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.tab-counter {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 7px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+.tab-btn.active .tab-counter {
+  background: rgba(59, 130, 246, 0.25);
+  color: var(--accent-light);
+}
+
+/* Filter & Triaging Command Center */
+.triage-bar {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.triage-row-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.search-box {
+  flex: 1;
+  min-width: 240px;
+  position: relative;
+}
+.search-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px 8px 32px;
+  color: var(--text);
+  font-size: 13px;
+}
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.triage-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.select-control {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+
+/* Category Filter Pills */
+.category-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.cat-pill {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 20px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.cat-pill:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+.cat-pill.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* View Mode Switcher */
+.view-switch {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+.view-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.view-btn.active {
+  background: var(--panel-elevated);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Finding Cards */
+.finding-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  margin-bottom: 14px;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.finding-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+/* Priority is shown by the colour of the word only; cards stay neutral. */
+.priority-tag {
+  background: none;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.priority-tag.priority-p0 { color: #ef4444; }
+.priority-tag.priority-p1 { color: #f97316; }
+.priority-tag.priority-p2 { color: #f59e0b; }
+.priority-tag.priority-p3 { color: #06b6d4; }
+.priority-tag.priority-p4 { color: #94a3b8; }
+
+.category-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cat-is-attack { background: rgba(239, 68, 68, 0.16); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+.cat-api-leak { background: rgba(56, 189, 248, 0.16); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
+.cat-secrets-crypto { background: rgba(251, 191, 36, 0.16); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.35); }
+.cat-access-control { background: rgba(192, 132, 252, 0.16); color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.35); }
+.cat-supply-chain { background: rgba(251, 146, 60, 0.16); color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.35); }
+.cat-security-config { background: rgba(167, 139, 250, 0.16); color: #a78bfa; border: 1px solid rgba(167, 139, 250, 0.35); }
+.cat-simple-errors { background: rgba(148, 163, 184, 0.16); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.35); }
+
+.status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+.st-verified_fixed { background: rgba(16, 185, 129, 0.18); color: var(--ok); border: 1px solid rgba(16, 185, 129, 0.3); }
+.st-patch_unverified { background: rgba(245, 158, 11, 0.16); color: var(--warn); border: 1px solid rgba(245, 158, 11, 0.3); }
+.st-needs_review { background: rgba(139, 92, 246, 0.18); color: var(--purple); border: 1px solid rgba(139, 92, 246, 0.3); }
+.st-report_only { background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); }
+.st-discarded { background: rgba(255, 255, 255, 0.04); color: var(--text-muted); }
+
+.card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin-right: auto;
+}
+.cwe-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.card-loc {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin: 6px 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.code-path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text);
+}
+.route-badge {
+  color: var(--accent-light);
+  font-weight: 600;
+  background: rgba(59, 130, 246, 0.12);
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11.5px;
+}
+
+.attack-box {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.attack-box b { color: #f87171; }
+
+.remediation-box {
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #a7f3d0;
+}
+.remediation-box b { color: var(--ok); }
+
+/* Details & Collapsibles */
+details {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+summary:hover { color: var(--text); }
+details[open] summary { border-bottom: 1px solid var(--line); }
+.details-content { padding: 10px 12px; }
+
+/* Tables */
+table { border-collapse: collapse; width: 100%; font-size: 12px; }
+th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { color: var(--text-muted); font-weight: 600; background: rgba(255, 255, 255, 0.02); }
+
+/* Code Diffs */
+.diff-view {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: auto;
+  max-height: 380px;
+  background: #010409;
+}
+.diff-view div { padding: 1px 10px; white-space: pre; }
+.diff-view .add { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+.diff-view .del { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+.diff-view .hunk { background: rgba(59, 130, 246, 0.15); color: var(--accent-light); font-weight: 600; }
+
+/* Event Log */
+.event-log-container {
+  background: #010409;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+.event-log-container div { padding: 2px 0; }
+.log-ts { color: var(--text-muted); margin-right: 8px; }
+.log-stage { color: var(--purple); font-weight: 600; margin-right: 6px; }
+.log-level-info { color: var(--text); }
+.log-level-warn { color: var(--warn); }
+.log-level-error { color: var(--bad); font-weight: 600; }
+
+/* Permission Request Banner */
+.perm-alert {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(180, 83, 9, 0.1));
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.perm-title { font-weight: 700; color: #fbbf24; font-size: 13.5px; }
+
+/* Empty State */
+.empty-hero {
+  text-align: center;
+  padding: 60px 20px;
+  max-width: 580px;
+  margin: 0 auto;
+}
+.empty-icon {
+  font-size: 42px;
+  margin-bottom: 14px;
+  display: inline-block;
+}
+.empty-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+.empty-sub { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin-bottom: 20px; }
+
+/* Tool status badges in header */
+.tool-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  color: var(--text-secondary);
+}
+.tool-pill.ready { border-color: rgba(16, 185, 129, 0.4); color: var(--ok); }
+
+/* Copy feedback tooltip */
+.copy-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 1px 6px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.copy-btn:hover { color: var(--text); border-color: var(--line-strong); }
 </style>
 </head>
 <body>
+
 <header>
-  <h1>🛡 secreview</h1>
-  <span class="sub" id="hdrsub">Self-Verifying AI Security Reviewer</span>
-  <span style="flex:1"></span>
-  <span class="sub" id="conn"></span>
-</header>
-<div class="layout">
-  <div class="sidebar">
-    <div class="newscan">
-      <div style="font-weight:600;margin-bottom:4px">New scan</div>
-      <input id="projpath" placeholder="path to project to scan" />
-      <select id="provider">
-        <option value="">LLM: disabled (deterministic only)</option>
-        <option value="fallback">LLM: fallback (OpenRouter &gt; Gemini &gt; local)</option>
-        <option value="local">LLM: local (Ollama)</option>
-        <option value="openrouter">LLM: OpenRouter</option>
-        <option value="gemini">LLM: Gemini</option>
-      </select>
-      <select id="sandbox">
-        <option value="docker">Sandbox: docker (isolated)</option>
-        <option value="local">Sandbox: local (dev, not isolated)</option>
-      </select>
-      <label class="muted" style="font-size:12px;display:block"><input type="checkbox" id="noverify" style="width:auto" checked> detection only (skip Verify — runs no code, no Docker)</label>
-      <label class="muted" style="font-size:12px;display:block"><input type="checkbox" id="noground" style="width:auto"> ablation: skip Ground</label>
-      <button class="btn" style="width:100%;margin-top:6px" onclick="startScan()">Start scan</button>
-      <div id="scanmsg" class="muted" style="font-size:11px;margin-top:4px"></div>
+  <div class="brand">
+    <div class="brand-icon">🛡️</div>
+    <div>
+      <h1>secreview <span style="font-size:11px;font-weight:500;color:var(--text-muted)">v0.1.0</span></h1>
     </div>
-    <div id="runlist"></div>
   </div>
-  <div class="main" id="main"><div class="empty">Select a run, or start a new scan.</div></div>
+  <span class="tagline">Self-Verifying AI Security Reviewer</span>
+
+  <div class="header-actions">
+    <div id="toolsStatus" style="display:flex;gap:6px"></div>
+    <div class="status-indicator">
+      <span class="dot d-done" id="connDot"></span>
+      <span id="connText">Connected</span>
+    </div>
+    <button class="btn primary sm" onclick="toggleScanConfig()">+ New Scan</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section" style="padding-bottom:10px">
+      <div class="sidebar-title">
+        <span>Security Scans</span>
+        <span id="runCountBadge" style="background:rgba(255,255,255,0.08);padding:1px 6px;border-radius:8px">0</span>
+      </div>
+      <input type="text" id="runSearchInput" class="form-control" placeholder="Filter scans..." oninput="filterRunList()" style="padding:6px 10px;font-size:12px" />
+    </div>
+    <div class="run-list" id="runlist">
+      <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:12px">Loading scan history...</div>
+    </div>
+    <div class="sidebar-section" style="margin-top:auto;background:rgba(0,0,0,0.2);font-size:11px;color:var(--text-muted)">
+      <div style="display:flex;justify-content:space-between">
+        <span>Target: Local / Sandbox</span>
+        <span>Storage: SQLite</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Area -->
+  <div class="main" id="main">
+    <div class="empty-hero">
+      <span class="empty-icon">🛡️</span>
+      <div class="empty-title">Welcome to Self-Verifying AI Security Reviewer</div>
+      <div class="empty-sub">
+        Detect security flaws across Python, JavaScript & Java codebases, map issues to Information Security attacks, synthesize verified fixes, and prove them with runnable exploit oracles in isolated sandboxes.
+      </div>
+      <button class="btn primary" onclick="toggleScanConfig(true)">Configure & Start New Scan</button>
+    </div>
+  </div>
 </div>
 
 <script>
-const $ = (s,el=document)=>el.querySelector(s);
-const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let state = {runId:null, tab:"findings", lastEvent:0, findings:[], endpoints:[], run:null, filter:"all", timer:null};
+// --- State & Taxonomy Definitions ---
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-async function api(path, opts){ const r = await fetch(path, opts); if(!r.ok) throw new Error(r.status); return r.json(); }
+// Complete Categorization taxonomy mapped to our project plan and types of issues
+const CATEGORY_META = {
+  is_attack: {
+    id: "is_attack",
+    label: "Related to IS Attacks",
+    shortLabel: "IS Attack",
+    icon: "💥",
+    cssClass: "cat-is-attack",
+    desc: "Exploit-driven attacks: Injections (SQLi, NoSQLi, Command, Code), XSS, Path Traversal, SSRF, Deserialization, Prompt Injection, RAG Poisoning."
+  },
+  api_leak: {
+    id: "api_leak",
+    label: "API & Data Leaks",
+    shortLabel: "API Leak",
+    icon: "💧",
+    cssClass: "cat-api-leak",
+    desc: "Sensitive data exposure in API responses, stack trace / error detail leaks, sensitive log outputs, and browser bundle exposures."
+  },
+  secrets_crypto: {
+    id: "secrets_crypto",
+    label: "Secrets & Cryptography",
+    shortLabel: "Secret / Crypto",
+    icon: "🔑",
+    cssClass: "cat-secrets-crypto",
+    desc: "Hardcoded API tokens, committed passwords, weak credential hashes (MD5/SHA1), weak ciphers, insecure randomness, and JWT misuse."
+  },
+  access_control: {
+    id: "access_control",
+    label: "Access Control & Auth",
+    shortLabel: "Access Control",
+    icon: "🚪",
+    cssClass: "cat-access-control",
+    desc: "Missing role checks (RBAC), broken object level auth (IDOR/BOLA), unauthenticated sensitive endpoints, and mass assignment."
+  },
+  supply_chain: {
+    id: "supply_chain",
+    label: "Supply Chain & Dependencies",
+    shortLabel: "Supply Chain",
+    icon: "📦",
+    cssClass: "cat-supply-chain",
+    desc: "Known package CVEs / advisories, unpinned manifest versions, typosquatting, and unverified package dependencies."
+  },
+  security_config: {
+    id: "security_config",
+    label: "Security Configurations",
+    shortLabel: "Security Config",
+    icon: "⚙️",
+    cssClass: "cat-security-config",
+    desc: "Disabled TLS certificate verification, cleartext transport, missing rate limiting, CORS misconfigurations, and debug mode enabled."
+  },
+  simple_errors: {
+    id: "simple_errors",
+    label: "Simple Errors & Code Quality",
+    shortLabel: "Simple Error",
+    icon: "📝",
+    cssClass: "cat-simple-errors",
+    desc: "General code bugs, syntax mistakes, dead code, and linter warnings (Ruff, ESLint, PMD, SpotBugs)."
+  }
+};
 
-async function loadRuns(){
-  try{
-    const runs = await api("/api/runs");
-    $("#conn").textContent = "connected";
-    $("#runlist").innerHTML = runs.map(r=>{
-      const s = r.summary||{};
-      return `<div class="runrow ${r.id===state.runId?'active':''}" onclick="openRun('${r.id}')">
-        <div class="id"><span class="dot d-${r.status}"></span>${esc(r.id)}</div>
-        <div class="meta">${esc((r.target||'').split(/[\\/]/).pop())} · ${r.status}${s.reportable!=null?` · ${s.reportable} findings`:''}</div>
-      </div>`;
-    }).join("") || '<div class="empty">no runs yet</div>';
-  }catch(e){ $("#conn").textContent="backend offline"; }
+const PRIORITY_META = {
+  P0: { code: "P0", label: "Critical", score: 0, cssClass: "priority-p0", desc: "Immediate remote exploit / critical compromise" },
+  P1: { code: "P1", label: "High", score: 1, cssClass: "priority-p1", desc: "High severity vulnerability" },
+  P2: { code: "P2", label: "Medium", score: 2, cssClass: "priority-p2", desc: "Moderate security risk or weakness" },
+  P3: { code: "P3", label: "Low", score: 3, cssClass: "priority-p3", desc: "Low impact / defense-in-depth hardening" },
+  P4: { code: "P4", label: "Info", score: 4, cssClass: "priority-p4", desc: "Informational note / simple code quality error" }
+};
+
+let state = {
+  runId: null,
+  tab: "findings",
+  lastEvent: 0,
+  findings: [],
+  endpoints: [],
+  perms: [],
+  run: null,
+  runs: [],
+  filterCategory: "all",
+  filterPriority: "all",
+  filterStatus: "all",
+  searchQuery: "",
+  sortBy: "priority",
+  viewMode: "feed", // feed | grouped | table
+  hideDiscarded: true,
+  timer: null,
+  showConfig: false,
+  presets: [],
+  tools: {}
+};
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.detail || r.statusText || `HTTP ${r.status}`);
+  }
+  return r.json();
 }
 
-async function startScan(){
-  const project = $("#projpath").value.trim();
-  if(!project){ $("#scanmsg").textContent="enter a project path"; return; }
-  const options = {"llm.enabled": !!$("#provider").value, "verify.sandbox": $("#sandbox").value,
-                   "verify.enabled": !$("#noverify").checked, "permissions.mode":"ask"};
-  if($("#provider").value) options["llm.provider"]=$("#provider").value;
-  $("#scanmsg").textContent="starting…";
-  try{
-    const res = await fetch("/api/scan",{method:"POST",headers:{"content-type":"application/json"},
-      body:JSON.stringify({project, options, no_ground: $("#noground").checked})});
-    if(!res.ok){ const d = await res.json().catch(()=>({})); $("#scanmsg").textContent = d.detail || `failed to start (HTTP ${res.status})`; return; }
-    const r = await res.json();
-    $("#scanmsg").textContent="";
-    await loadRuns();
-    if(r.run_id) openRun(r.run_id);
-  }catch(e){ $("#scanmsg").textContent="could not reach the backend"; }
+// Map any finding to its clean category
+function getFindingCategory(f) {
+  const c = (f.category || "").toLowerCase();
+  const vc = (f.vuln_class || "").toLowerCase();
+  const tool = (f.tool || "").toLowerCase();
+
+  if (c === "general_bug" || vc === "general_bug" || tool === "ruff" || tool === "eslint" || tool === "pmd" || tool === "spotbugs") {
+    return CATEGORY_META.simple_errors;
+  }
+  if (c === "data_leakage" || vc.includes("leak") || vc.includes("sensitive_data") || vc.includes("error_leakage") || vc.includes("logging") || vc.includes("client_side_secret")) {
+    return CATEGORY_META.api_leak;
+  }
+  if (c === "crypto" || vc.includes("secret") || vc.includes("credential") || vc.includes("crypto") || vc.includes("random") || vc.includes("jwt")) {
+    return CATEGORY_META.secrets_crypto;
+  }
+  if (c === "access_control" || vc.includes("role") || vc.includes("auth") || vc.includes("idor") || vc.includes("mass_assignment") || vc.includes("endpoint")) {
+    return CATEGORY_META.access_control;
+  }
+  if (c === "dependency" || vc.includes("dependency") || vc.includes("supply_chain")) {
+    return CATEGORY_META.supply_chain;
+  }
+  if (c === "configuration" || vc.includes("tls") || vc.includes("cors") || vc.includes("rate_limit") || vc.includes("debug") || vc.includes("upload") || vc.includes("cleartext") || vc.includes("resource_abuse")) {
+    return CATEGORY_META.security_config;
+  }
+  if (c === "injection" || f.attack || f.attack_tier || vc.includes("sqli") || vc.includes("xss") || vc.includes("cmdi") || vc.includes("traversal") || vc.includes("ssrf") || vc.includes("prompt")) {
+    return CATEGORY_META.is_attack;
+  }
+  return CATEGORY_META.simple_errors;
 }
 
-function openRun(id){
-  state.runId=id; state.lastEvent=0; state.logHTML="";
-  if(state.timer) clearInterval(state.timer);
-  loadRuns(); refresh();
-  state.timer = setInterval(refresh, 1200);
+// Map any finding to its priority
+function getPriority(f) {
+  const sev = (f.severity || "medium").toLowerCase();
+  if (sev === "critical") return PRIORITY_META.P0;
+  if (sev === "high") return PRIORITY_META.P1;
+  if (sev === "medium") return PRIORITY_META.P2;
+  if (sev === "low") return PRIORITY_META.P3;
+  return PRIORITY_META.P4;
 }
 
-async function refresh(){
-  if(!state.runId) return;
-  try{
+// Priority-wise ordering & sorting helper
+function sortFindingsList(list, sortBy) {
+  return [...list].sort((a, b) => {
+    if (sortBy === "priority") {
+      const pA = getPriority(a).score;
+      const pB = getPriority(b).score;
+      if (pA !== pB) return pA - pB; // Lower score = Higher priority (P0 before P1)
+      const statusWeight = { verified_fixed: 0, patch_unverified: 1, grounded: 2, needs_review: 3, report_only: 4, discarded: 5 };
+      const sA = statusWeight[a.status] ?? 9;
+      const sB = statusWeight[b.status] ?? 9;
+      if (sA !== sB) return sA - sB;
+      return (a.title || "").localeCompare(b.title || "");
+    }
+    if (sortBy === "priority_asc") {
+      return getPriority(b).score - getPriority(a).score;
+    }
+    if (sortBy === "status") {
+      const statusWeight = { verified_fixed: 0, patch_unverified: 1, grounded: 2, needs_review: 3, report_only: 4, discarded: 5 };
+      return (statusWeight[a.status] ?? 9) - (statusWeight[b.status] ?? 9);
+    }
+    if (sortBy === "category") {
+      return getFindingCategory(a).label.localeCompare(getFindingCategory(b).label);
+    }
+    if (sortBy === "file") {
+      const fA = `${a.file || ""}:${a.line || 0}`;
+      const fB = `${b.file || ""}:${b.line || 0}`;
+      return fA.localeCompare(fB);
+    }
+    return 0;
+  });
+}
+
+// --- Initial Data Loading ---
+async function init() {
+  loadToolStatus();
+  loadPresets();
+  await loadRuns();
+  if (state.runs && state.runs.length > 0) {
+    // Open the latest run by default if not set
+    openRun(state.runs[0].id);
+  }
+}
+
+async function loadToolStatus() {
+  try {
+    state.tools = await api("/api/tools");
+    const container = $("#toolsStatus");
+    if (!container) return;
+    const items = [];
+    if (state.tools.semgrep) items.push(`<span class="tool-pill ${state.tools.semgrep.available?'ready':''}">Semgrep ${state.tools.semgrep.available?'✓':'✗'}</span>`);
+    if (state.tools.docker) items.push(`<span class="tool-pill ${state.tools.docker.daemon?'ready':''}">Docker ${state.tools.docker.daemon?'✓':'(off)'}</span>`);
+    container.innerHTML = items.join("");
+  } catch (e) {}
+}
+
+async function loadPresets() {
+  try {
+    state.presets = await api("/api/presets");
+  } catch (e) {}
+}
+
+async function loadRuns() {
+  try {
+    state.runs = await api("/api/runs");
+    $("#connDot").className = "dot d-done";
+    $("#connText").textContent = "Connected";
+    $("#runCountBadge").textContent = state.runs.length;
+    renderRunList();
+  } catch (e) {
+    $("#connDot").className = "dot d-failed";
+    $("#connText").textContent = "Offline";
+  }
+}
+
+function renderRunList() {
+  const query = ($("#runSearchInput")?.value || "").toLowerCase().trim();
+  const filtered = state.runs.filter(r => {
+    if (!query) return true;
+    return r.id.toLowerCase().includes(query) || (r.target || "").toLowerCase().includes(query);
+  });
+
+  const html = filtered.map(r => {
+    const s = r.summary || {};
+    const baseTarget = (r.target || "").split(/[\\/]/).pop() || "unknown";
+    const reportable = s.reportable != null ? s.reportable : (s.total_findings || 0);
+    const verified = s.verified_fixed || 0;
+    return `
+      <div class="runrow ${r.id === state.runId ? 'active' : ''}" onclick="openRun('${r.id}')">
+        <div class="id">
+          <span class="dot d-${r.status}"></span>
+          <span>${esc(r.id)}</span>
+        </div>
+        <div class="meta">
+          <span title="${esc(r.target)}" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(baseTarget)}</span>
+          <span>
+            ${r.status === 'running' ? '<b style="color:var(--accent)">RUNNING</b>' :
+              `${reportable} issues ${verified ? `· <span style="color:var(--ok)">${verified} fixed</span>` : ''}`}
+          </span>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  $("#runlist").innerHTML = html || '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:12px">No matching scans</div>';
+}
+
+function filterRunList() { renderRunList(); }
+
+function openRun(id) {
+  state.runId = id;
+  state.lastEvent = 0;
+  state.logHTML = "";
+  if (state.timer) clearInterval(state.timer);
+  renderRunList();
+  refresh();
+  state.timer = setInterval(refresh, 1400);
+}
+
+async function refresh() {
+  if (!state.runId) return;
+  try {
     state.run = await api(`/api/runs/${state.runId}`);
     state.findings = await api(`/api/runs/${state.runId}/findings`);
     state.endpoints = await api(`/api/runs/${state.runId}/endpoints`);
     state.perms = await api(`/api/runs/${state.runId}/permissions`);
     const ev = await api(`/api/runs/${state.runId}/events?after=${state.lastEvent}`);
-    if(ev.length){ state.lastEvent = ev[ev.length-1].id;
-      state.logHTML = (state.logHTML||"") + ev.map(e=>
-        `<div><span class="ts">${new Date(e.ts*1000).toLocaleTimeString()}</span> <span class="l-${e.level}">${esc(e.stage?`[${e.stage}] `:'')}${esc(e.message)}</span></div>`).join(""); }
-    render();
-    if(state.run.status!=="running" && state.timer){ clearInterval(state.timer); state.timer=null; loadRuns(); }
-  }catch(e){}
+    if (ev.length) {
+      state.lastEvent = ev[ev.length - 1].id;
+      state.logHTML = (state.logHTML || "") + ev.map(e => `
+        <div>
+          <span class="log-ts">${new Date(e.ts * 1000).toLocaleTimeString()}</span>
+          ${e.stage ? `<span class="log-stage">[${esc(e.stage)}]</span>` : ''}
+          <span class="log-level-${e.level}">${esc(e.message)}</span>
+        </div>
+      `).join("");
+    }
+    renderMain();
+    if (state.run.status !== "running" && state.timer) {
+      clearInterval(state.timer);
+      state.timer = null;
+      loadRuns();
+    }
+  } catch (e) {}
 }
 
-function render(){
-  const run = state.run, s = run.summary||{}, m = $("#main");
-  const stages = run.stages||[];
-  const pending = (state.perms||[]).filter(p=>p.status==="pending");
-  const permHTML = pending.map(p=>`<div class="perm"><b>Permission requested:</b> ${esc(p.detail)}
-    <div class="acts"><button class="btn ok sm" onclick="decide('${p.id}','approve')">Approve</button>
-    <button class="btn bad sm" onclick="decide('${p.id}','deny')">Deny</button>
-    <button class="btn ghost sm" onclick="decide('${p.id}','approve',true)">Approve + remember</button></div></div>`).join("");
+// --- Render Main View ---
+function renderMain() {
+  const m = $("#main");
+  if (!m) return;
+  const run = state.run;
+  if (!run) return;
+  const s = run.summary || {};
+
+  // Build New Scan Drawer / Config form if toggled
+  let configHTML = "";
+  if (state.showConfig) {
+    configHTML = renderScanConfigDrawer();
+  }
+
+  // Permission Banner (if any pending)
+  const pending = (state.perms || []).filter(p => p.status === "pending");
+  const permHTML = pending.map(p => `
+    <div class="perm-alert">
+      <div>
+        <div class="perm-title">⚠️ Action Requires User Authorization</div>
+        <div style="font-size:12.5px;color:var(--text);margin-top:2px">${esc(p.detail)}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn ok sm" onclick="decide('${p.id}','approve')">Approve</button>
+        <button class="btn bad sm" onclick="decide('${p.id}','deny')">Deny</button>
+        <button class="btn ghost sm" onclick="decide('${p.id}','approve',true)">Approve + Always Remember</button>
+      </div>
+    </div>
+  `).join("");
+
+  // Stepper Header & Visual Steps
+  const stepperHTML = renderPipelineStepper(run);
+
+  // Active / Finished Status Banner
+  const bannerHTML = renderStatusBanner(run, s);
+
+  // Priority & Triage KPI Cards
+  const kpisHTML = renderPriorityKPIs(s);
 
   m.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-      <h2 style="margin:0;font-size:16px"><span class="dot d-${run.status}"></span>${esc(run.id)}</h2>
-      <span class="muted mono">${esc(run.target)}</span>
-      ${run.status==='done'?`<a class="btn ghost sm" href="/api/runs/${run.id}/report" target="_blank" onclick="event.stopPropagation()">report.html on disk</a>`:''}
-    </div>
+    ${configHTML}
     ${permHTML}
-    <div class="stages">${stages.map(st=>{
-      const pct = st.total? Math.round(100*st.done/st.total) : (st.status==='done'?100:st.status==='running'?30:0);
-      return `<div class="stage ${st.status}"><div class="name">${esc(st.name)}</div>
-        <div class="bar"><div class="fill" style="width:${pct}%"></div></div>
-        <div class="note">${esc(st.note||st.status)}</div></div>`;}).join("")}</div>
-    <div class="tiles">
-      ${tile(s.reportable,'reportable','')}
-      ${tile(s.verified_fixed,'verified fixed','var(--ok)')}
-      ${tile(s.patch_unverified,'patch unverified','var(--warn)')}
-      ${tile(s.needs_review,'needs review','var(--purple)')}
-      ${tile(s.discarded,'discarded (FP)','var(--muted)')}
-      ${tile((state.endpoints||[]).length,'endpoints','')}
+    ${bannerHTML}
+    ${stepperHTML}
+    ${kpisHTML}
+
+    <div class="tabs-nav">
+      <div class="tab-btn ${state.tab === 'findings' ? 'active' : ''}" onclick="switchTab('findings')">
+        <span>🛡️ Issues & Vulnerabilities</span>
+        <span class="tab-counter">${state.findings.filter(f => !state.hideDiscarded || f.status !== 'discarded').length}</span>
+      </div>
+      <div class="tab-btn ${state.tab === 'endpoints' ? 'active' : ''}" onclick="switchTab('endpoints')">
+        <span>🌐 API Surface</span>
+        <span class="tab-counter">${(state.endpoints || []).length}</span>
+      </div>
+      <div class="tab-btn ${state.tab === 'log' ? 'active' : ''}" onclick="switchTab('log')">
+        <span>📋 Execution Log</span>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        ${run.status === 'done' ? `
+          <a class="btn ghost sm" href="/api/runs/${run.id}/report" target="_blank">📄 HTML Report</a>
+          <button class="btn ghost sm" onclick="exportFindingsJSON()">⬇ Export JSON</button>
+        ` : ''}
+      </div>
     </div>
-    <div class="tabs">
-      ${tab('findings','Findings ('+state.findings.filter(f=>f.status!=='discarded').length+')')}
-      ${tab('endpoints','API surface ('+(state.endpoints||[]).length+')')}
-      ${tab('log','Event log')}
+
+    <div id="tabContent"></div>
+  `;
+
+  renderTabContent();
+}
+
+function switchTab(t) {
+  state.tab = t;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.textContent.includes(t)));
+  renderTabContent();
+}
+
+// --- Stepper: Clear Indication of Which Step is in Progress ---
+function renderPipelineStepper(run) {
+  const stages = run.stages || [];
+  // Canonical pipeline stages from project plan
+  const canonicalStages = [
+    { key: "discover", name: "1. Discover", icon: "🔎", desc: "AST & module mapping" },
+    { key: "detect", name: "2. Detect", icon: "🛡️", desc: "Multi-engine scanning" },
+    { key: "provenance", name: "3. Provenance", icon: "📜", desc: "Git history & blame" },
+    { key: "ground", name: "4. Ground", icon: "🎯", desc: "Taint graph & FP prune" },
+    { key: "verify", name: "5. Patch & Verify", icon: "🧪", desc: "Sandbox exploit proving" },
+    { key: "report", name: "6. Report", icon: "📊", desc: "Artifacts & summaries" }
+  ];
+
+  // Map run stage records
+  const stageMap = {};
+  stages.forEach(st => { stageMap[st.name] = st; });
+
+  const stepsHTML = canonicalStages.map((cs, idx) => {
+    const st = stageMap[cs.key];
+    let stepClass = "step-pending";
+    let statusLabel = "Queued";
+    let pct = 0;
+    let note = cs.desc;
+
+    if (st) {
+      if (st.status === "running") {
+        stepClass = "step-running";
+        statusLabel = "● IN PROGRESS";
+        pct = st.total ? Math.round(100 * st.done / st.total) : 45;
+        note = st.note || "Processing active step...";
+      } else if (st.status === "done") {
+        stepClass = "step-done";
+        statusLabel = "✓ Done";
+        pct = 100;
+        note = st.note || "Completed";
+      } else if (st.status === "failed") {
+        stepClass = "step-failed";
+        statusLabel = "✕ Failed";
+        pct = 100;
+        note = st.note || "Error encountered";
+      } else if (st.status === "skipped") {
+        stepClass = "step-skipped";
+        statusLabel = "⏭ Skipped";
+        pct = 0;
+        note = st.note || "Switched off for this run";
+      }
+      if (cs.key === "report" && st.status === "done") note = "report.json + report.html written";
+    } else if (run.status === "done") {
+      // If run is done and stage was not recorded, it was skipped (older runs: provenance on non-git)
+      stepClass = "step-skipped";
+      statusLabel = "⏭ Skipped";
+      note = "Not applicable";
+    }
+
+    return `
+      <div class="stage-step ${stepClass}">
+        <div class="step-top">
+          <div class="step-number">${cs.icon}</div>
+          <div class="step-status-pill">${statusLabel}</div>
+        </div>
+        <div>
+          <div class="step-name">${cs.name}</div>
+          <div class="step-note" title="${esc(note)}">${esc(note)}</div>
+        </div>
+        <div class="step-progress-bar">
+          <div class="step-progress-fill" style="width:${pct}%"></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  return `
+    <div class="stepper-container">
+      <div class="stepper-header">
+        <div class="stepper-header-title">
+          <span>Pipeline Progress Execution</span>
+          ${run.status === 'running' ? '<span style="color:var(--accent);font-weight:700">● LIVE RUN</span>' : ''}
+        </div>
+        <div style="font-size:12px;color:var(--text-muted)">
+          Target: <span class="code-path">${esc(run.target)}</span>
+        </div>
+      </div>
+      <div class="stages-track">
+        ${stepsHTML}
+      </div>
     </div>
-    <div id="tabbody"></div>`;
-  renderTab();
+  `;
 }
-function tile(n,l,c){ return `<div class="tile"><div class="n" style="color:${c||'var(--text)'}">${n==null?'–':n}</div><div class="l">${l}</div></div>`; }
-function tab(id,label){ return `<div class="tab ${state.tab===id?'active':''}" onclick="state.tab='${id}';renderTab()">${label}</div>`; }
 
-function renderTab(){
-  const b = $("#tabbody"); if(!b) return;
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.textContent.toLowerCase().startsWith(state.tab)));
-  if(state.tab==='log'){ b.innerHTML = `<div class="log">${state.logHTML||'<span class="muted">waiting…</span>'}</div>`;
-    const lg=b.querySelector('.log'); if(lg) lg.scrollTop=lg.scrollHeight; return; }
-  if(state.tab==='endpoints'){ b.innerHTML = endpointsTable(); return; }
-  // findings
-  const classes = [...new Set(state.findings.filter(f=>f.status!=='discarded').map(f=>f.vuln_class))];
-  const shown = state.findings.filter(f=>f.status!=='discarded' &&
-    (state.filter==='all'||f.status===state.filter||f.vuln_class===state.filter));
-  b.innerHTML = `<div class="filterbar">
-      ${chip('all','All')}
-      ${chip('verified_fixed','Verified')}${chip('patch_unverified','Unverified')}
-      ${chip('needs_review','Needs review')}${chip('report_only','General bugs')}
-    </div>` + (shown.length? shown.map(findingCard).join("") : '<div class="empty">no findings</div>');
+// --- Status Banner ---
+function renderStatusBanner(run, s) {
+  if (run.status === "running") {
+    const activeStage = (run.stages || []).find(st => st.status === "running");
+    const stageName = activeStage ? activeStage.name.toUpperCase() : "PIPELINE";
+    const note = activeStage && activeStage.note ? activeStage.note : "Analyzing target codebase...";
+    return `
+      <div class="run-banner banner-running">
+        <div class="banner-content">
+          <div class="banner-badge badge-running">
+            <span class="dot d-running"></span>
+            <span>Active Review in Progress · [${stageName}]</span>
+          </div>
+          <div class="banner-title">Executing Step: ${stageName}</div>
+          <div class="banner-subtitle">${esc(note)}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:12px;color:var(--text-muted)">Scan ID: <span class="code-path">${esc(run.id)}</span></div>
+          <div style="font-size:11.5px;color:var(--accent-light);margin-top:4px">Polling live events...</div>
+        </div>
+      </div>
+    `;
+  }
+  if (run.status === "done") {
+    const total = s.reportable != null ? s.reportable : (s.total_findings || 0);
+    const verified = s.verified_fixed || 0;
+    const elapsed = s.elapsed_seconds || 0;
+    return `
+      <div class="run-banner banner-done">
+        <div class="banner-content">
+          <div class="banner-badge badge-done">✓ Review Completed Successfully</div>
+          <div class="banner-title">${total} Reportable Findings Triaged (${verified} Verified Fixed)</div>
+          <div class="banner-subtitle">Pipeline executed in ${elapsed}s across ${s.languages ? s.languages.join(', ') : 'project'} modules. ${verified ? `${verified} fix${verified > 1 ? 'es' : ''} proven by execution in the sandbox; other patches are recommendations only.` : 'No fix was proven by execution in this run; patches shown are recommendations only.'}</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <a class="btn ghost sm" href="/api/runs/${run.id}/report" target="_blank">View Standalone Report</a>
+        </div>
+      </div>
+    `;
+  }
+  if (run.status === "failed") {
+    return `
+      <div class="run-banner banner-failed">
+        <div class="banner-content">
+          <div class="banner-badge badge-failed">✕ Scan Interrupted / Failed</div>
+          <div class="banner-title">Pipeline Failed: ${esc(run.error || "Execution terminated unexpectedly")}</div>
+          <div class="banner-subtitle">Check the event log tab below for stack traces and error diagnostics.</div>
+        </div>
+      </div>
+    `;
+  }
+  return "";
 }
-function chip(f,l){ const n=f==='all'?state.findings.filter(x=>x.status!=='discarded').length:state.findings.filter(x=>x.status===f).length;
-  return `<button class="chip ${state.filter===f?'active':''}" onclick="state.filter='${f}';renderTab()">${l} ${n?`(${n})`:''}</button>`; }
 
-function findingCard(f){
-  const ev = f.evidence||{}, patch = f.patch||f.recommended_patch, ep=f.endpoint;
-  const chain = (ev.chain||[]).map(s=>`<tr><td class="muted">${s.line}</td><td class="mono">${esc(s.code)}</td><td class="muted">${esc(s.note)}</td></tr>`).join("");
-  return `<div class="card">
-    <div class="chead">
-      <span class="sev sev-${f.severity}">${f.severity}</span>
-      <span class="pill st-${f.status}">${esc(f.status.replace(/_/g,' '))}</span>
-      <b>${esc(f.title)}</b><span class="muted">${esc((f.cwe||[]).join(', '))}</span>
+// --- Priority & Triage KPI Cards ---
+function renderPriorityKPIs(s) {
+  // Compute priority counts from active findings
+  let p0 = 0, p1 = 0, p2 = 0, p3 = 0, p4 = 0;
+  state.findings.forEach(f => {
+    if (f.status === "discarded") return;
+    const p = getPriority(f).code;
+    if (p === "P0") p0++;
+    else if (p === "P1") p1++;
+    else if (p === "P2") p2++;
+    else if (p === "P3") p3++;
+    else p4++;
+  });
+
+  const verified = s.verified_fixed || 0;
+  const needsReview = s.needs_review || 0;
+  const discarded = s.discarded || 0;
+
+  return `
+    <div class="kpi-grid">
+      <div class="kpi-tile ${state.filterPriority==='P0'?'active-kpi':''}" onclick="setPriorityFilter('P0')">
+        <div class="num" style="color:#ef4444">${p0}</div>
+        <div class="lbl"><span>P0 · Critical</span><span class="priority-tag priority-p0">P0</span></div>
+      </div>
+      <div class="kpi-tile ${state.filterPriority==='P1'?'active-kpi':''}" onclick="setPriorityFilter('P1')">
+        <div class="num" style="color:#f97316">${p1}</div>
+        <div class="lbl"><span>P1 · High</span><span class="priority-tag priority-p1">P1</span></div>
+      </div>
+      <div class="kpi-tile ${state.filterPriority==='P2'?'active-kpi':''}" onclick="setPriorityFilter('P2')">
+        <div class="num" style="color:#f59e0b">${p2}</div>
+        <div class="lbl"><span>P2 · Medium</span><span class="priority-tag priority-p2">P2</span></div>
+      </div>
+      <div class="kpi-tile ${state.filterPriority==='P3'?'active-kpi':''}" onclick="setPriorityFilter('P3')">
+        <div class="num" style="color:#06b6d4">${p3}</div>
+        <div class="lbl"><span>P3 · Low</span><span class="priority-tag priority-p3">P3</span></div>
+      </div>
+      <div class="kpi-tile ${state.filterPriority==='P4'?'active-kpi':''}" onclick="setPriorityFilter('P4')">
+        <div class="num" style="color:#94a3b8">${p4}</div>
+        <div class="lbl"><span>P4 · Info / Simple</span><span class="priority-tag priority-p4">P4</span></div>
+      </div>
+      <div class="kpi-tile ${state.filterStatus==='verified_fixed'?'active-kpi':''}" onclick="setStatusFilter('verified_fixed')">
+        <div class="num" style="color:var(--ok)">${verified}</div>
+        <div class="lbl"><span>Verified Fixed</span><span>🧪 Proved</span></div>
+      </div>
+      <div class="kpi-tile ${state.filterStatus==='needs_review'?'active-kpi':''}" onclick="setStatusFilter('needs_review')">
+        <div class="num" style="color:var(--purple)">${needsReview}</div>
+        <div class="lbl"><span>Needs Review</span><span>🔍 Heuristic</span></div>
+      </div>
+      <div class="kpi-tile ${state.filterStatus==='discarded'?'active-kpi':''}" onclick="setStatusFilter('discarded')">
+        <div class="num" style="color:var(--text-muted)">${discarded}</div>
+        <div class="lbl"><span>Discarded (FP)</span><span>🚫 Pruned</span></div>
+      </div>
     </div>
-    <div class="loc"><span class="mono">${esc(f.file)}:${f.line}</span>
-      ${ep?` · <span class="route">${esc(ep.method)} ${esc(ep.path)}</span>`:''}
-      · <span class="muted">${esc(f.tool)}/${esc(f.rule_id)}</span></div>
-    <div>${esc(f.message)}</div>
-    ${f.attack?`<div class="muted" style="font-size:12px;margin-top:3px"><b>Enables:</b> ${esc(f.attack)}</div>`:''}
-    ${chain?`<details open><summary>Evidence (${ev.method}${ev.llm_used?' · LLM':''})</summary><table><tr><th>Line</th><th>Code</th><th>Role</th></tr>${chain}</table></details>`:`<div class="muted" style="font-size:12px;margin-top:4px">${esc(ev.summary||'')}</div>`}
-    ${f.provenance&&f.provenance.commit?`<div class="muted" style="font-size:11px;margin-top:4px">last changed in ${esc(f.provenance.commit)} by ${esc(f.provenance.author)} ${esc(f.provenance.date)}</div>`:''}
-    ${patch&&patch.diff?`<details><summary>${f.patch?'Patch (verified)':'Recommended patch (unverified)'} — ${esc(patch.source)}</summary>${diff(patch.diff)}</details>`:''}
-    ${verif(f.verification)}
-    <div class="muted" style="font-size:11px;margin-top:6px">Fix: ${esc(f.remediation)}</div>
-  </div>`;
-}
-function diff(d){ return `<div class="diff">${d.split("\n").map(l=>{const c=l[0]==='+'&&l[1]!=='+'?'add':l[0]==='-'&&l[1]!=='-'?'del':l.startsWith('@@')?'hunk':'';return `<div class="${c}">${esc(l)}</div>`;}).join("")}</div>`; }
-function verif(v){ if(!v||!v.length) return '';
-  return `<details><summary>Verification log (${v.length} attempt${v.length>1?'s':''})</summary><table>
-    <tr><th>#</th><th>Patch</th><th>Probe before</th><th>Probe after</th><th>Tests</th><th>Pass</th></tr>
-    ${v.map(a=>`<tr><td>${a.attempt}</td><td>${esc(a.patch_source)}</td><td>${esc(a.exploit_before)}</td><td>${esc(a.exploit_after)}</td><td>${esc(a.regression)}</td><td>${a.passed?'✅':'❌'}</td></tr>`).join("")}</table></details>`; }
-
-function endpointsTable(){
-  const eps = state.endpoints||[];
-  if(!eps.length) return '<div class="empty">no HTTP endpoints detected</div>';
-  return `<table><tr><th>Method</th><th>Path</th><th>Auth</th><th>Roles</th><th>Rate limit</th><th>Location</th></tr>
-    ${eps.map(e=>`<tr><td>${esc(e.method)}</td><td class="mono route">${esc(e.path)}</td>
-      <td class="${e.auth?'badge-auth':'badge-open'}">${e.auth?'🔒 yes':'🔓 no'}</td>
-      <td>${esc((e.roles||[]).join(', '))}</td><td>${e.rate_limited?'✓':''}</td>
-      <td class="muted mono">${esc(e.file)}:${e.line}</td></tr>`).join("")}</table>`;
+  `;
 }
 
-async function decide(pid,decision,remember){
-  await api(`/api/permissions/${pid}/${decision}?remember=${remember?'true':'false'}`,{method:"POST"});
-  refresh();
+function setPriorityFilter(p) {
+  state.filterPriority = state.filterPriority === p ? "all" : p;
+  state.tab = "findings";
+  renderMain();
+}
+function setStatusFilter(st) {
+  if (st === "discarded") {
+    state.hideDiscarded = false;
+  }
+  state.filterStatus = state.filterStatus === st ? "all" : st;
+  state.tab = "findings";
+  renderMain();
 }
 
-function syncVerifyToggle(){ const nv=$("#noverify").checked; $("#sandbox").disabled=nv; $("#sandbox").style.opacity=nv?.4:1; }
-$("#noverify").addEventListener("change", syncVerifyToggle); syncVerifyToggle();
-loadRuns(); setInterval(loadRuns, 4000);
+function clearFilters() {
+  state.filterPriority = "all";
+  state.filterStatus = "all";
+  state.filterCategory = "all";
+  state.searchQuery = "";
+  renderMain();
+}
+
+function clearFilter(kind) {
+  if (kind === "search") state.searchQuery = "";
+  else state["filter" + kind] = "all";
+  renderMain();
+}
+
+// --- Tab: Findings View (Priority & Categorization Engine) ---
+function renderTabContent() {
+  const container = $("#tabContent");
+  if (!container) return;
+
+  if (state.tab === "log") {
+    container.innerHTML = `
+      <div class="event-log-container">
+        ${state.logHTML || '<div style="color:var(--text-muted)">Awaiting execution events...</div>'}
+      </div>
+    `;
+    const el = container.querySelector(".event-log-container");
+    if (el) el.scrollTop = el.scrollHeight;
+    return;
+  }
+
+  if (state.tab === "endpoints") {
+    container.innerHTML = renderEndpointsTable();
+    return;
+  }
+
+  // Findings Tab. Remember whether the search box had focus: the toolbar is re-rendered below.
+  const active = document.activeElement;
+  const searching = active && active.id === "findingSearch";
+  const caret = searching ? active.selectionStart : 0;
+
+  let list = state.findings;
+
+  // Filter discarded
+  if (state.hideDiscarded && state.filterStatus !== "discarded") {
+    list = list.filter(f => f.status !== "discarded");
+  }
+
+  // Filter Priority
+  if (state.filterPriority !== "all") {
+    list = list.filter(f => getPriority(f).code === state.filterPriority);
+  }
+
+  // Filter Status
+  if (state.filterStatus !== "all") {
+    list = list.filter(f => f.status === state.filterStatus);
+  }
+
+  // Search Filter
+  if (state.searchQuery) {
+    const q = state.searchQuery.toLowerCase();
+    list = list.filter(f => {
+      const matchText = `${f.title || ''} ${f.vuln_class || ''} ${f.file || ''} ${f.message || ''} ${f.attack || ''} ${(f.cwe || []).join(' ')} ${f.code || ''}`.toLowerCase();
+      return matchText.includes(q);
+    });
+  }
+
+  // Category counts reflect every other active filter, so a pill's number is what clicking it shows
+  const catCounts = {};
+  Object.keys(CATEGORY_META).forEach(k => { catCounts[k] = 0; });
+  list.forEach(f => {
+    const cat = getFindingCategory(f).id;
+    catCounts[cat] = (catCounts[cat] || 0) + 1;
+  });
+  const totalReportable = list.length;
+
+  // Filter Category (applied last)
+  if (state.filterCategory !== "all") {
+    list = list.filter(f => getFindingCategory(f).id === state.filterCategory);
+  }
+
+  // Priority-wise ordering
+  list = sortFindingsList(list, state.sortBy);
+
+  // Active filters: every filter that is narrowing the list, each removable
+  const activeFilters = [];
+  if (state.filterPriority !== "all") activeFilters.push(["Priority", state.filterPriority, "Priority"]);
+  if (state.filterStatus !== "all") activeFilters.push(["Status", state.filterStatus.replace(/_/g, " "), "Status"]);
+  if (state.filterCategory !== "all") activeFilters.push(["Category", (CATEGORY_META[state.filterCategory] || {}).label || state.filterCategory, "Category"]);
+  if (state.searchQuery) activeFilters.push(["Search", `"${state.searchQuery}"`, "search"]);
+  const filterBarHTML = activeFilters.length ? `
+    <div class="filter-bar">
+      <span style="color:var(--text-muted)">Showing ${list.length} of ${state.findings.length} · filters (all apply together):</span>
+      ${activeFilters.map(([k, v, key]) => `<button class="filter-chip" onclick="clearFilter('${key}')" title="Remove this filter">${esc(k)}: ${esc(v)} ✕</button>`).join("")}
+      <button class="filter-clear" onclick="clearFilters()">Clear all</button>
+    </div>` : "";
+
+  // Category Pills Bar
+  const categoryPillsHTML = `
+    <div class="category-pills">
+      <button class="cat-pill ${state.filterCategory==='all'?'active':''}" onclick="setCategoryFilter('all')">
+        All Categories (${totalReportable})
+      </button>
+      ${Object.values(CATEGORY_META).map(cat => {
+        const count = catCounts[cat.id] || 0;
+        return `
+          <button class="cat-pill ${state.filterCategory===cat.id?'active':''}" onclick="setCategoryFilter('${cat.id}')">
+            <span>${cat.icon}</span>
+            <span>${cat.label}</span>
+            <span style="opacity:0.75;font-size:11px">(${count})</span>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+
+  // Triaging & Controls Toolbar
+  const toolbarHTML = `
+    <div class="triage-bar">
+      <div class="triage-row-top">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" class="search-input" id="findingSearch" placeholder="Search by flaw, file, CWE, rule, code snippet..."
+            value="${esc(state.searchQuery)}" oninput="handleSearch(this.value)" />
+        </div>
+
+        <div class="triage-controls">
+          <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px">
+            Sort by:
+            <select class="select-control" onchange="state.sortBy=this.value;renderTabContent()">
+              <option value="priority" ${state.sortBy==='priority'?'selected':''}>⚡ Priority: Highest First (P0 → P4)</option>
+              <option value="priority_asc" ${state.sortBy==='priority_asc'?'selected':''}>Priority: Lowest First (P4 → P0)</option>
+              <option value="status" ${state.sortBy==='status'?'selected':''}>Status: Verified Fixed First</option>
+              <option value="category" ${state.sortBy==='category'?'selected':''}>Category: Group by Type</option>
+              <option value="file" ${state.sortBy==='file'?'selected':''}>File: Path & Line A-Z</option>
+            </select>
+          </label>
+
+          <div class="view-switch">
+            <button class="view-btn ${state.viewMode==='feed'?'active':''}" onclick="setViewMode('feed')">Feed View</button>
+            <button class="view-btn ${state.viewMode==='grouped'?'active':''}" onclick="setViewMode('grouped')">Category Groups</button>
+          </div>
+
+          <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" ${state.hideDiscarded?'checked':''} onchange="state.hideDiscarded=this.checked;renderMain()" />
+            Hide False Positives
+          </label>
+        </div>
+      </div>
+
+      ${categoryPillsHTML}
+      ${filterBarHTML}
+    </div>
+  `;
+
+  // Render findings list according to view mode
+  let findingsHTML = "";
+  if (!list.length) {
+    findingsHTML = `
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);padding:48px;text-align:center;color:var(--text-muted)">
+        <div style="font-size:32px;margin-bottom:8px">🎉</div>
+        <div style="font-size:15px;font-weight:700;color:var(--text)">No Findings Matched</div>
+        <div style="font-size:12.5px;margin-top:4px">No issues match all of the active filters together${activeFilters.length ? ` (${activeFilters.map(a => esc(a[0])).join(" + ")})` : ""}.</div>
+        ${activeFilters.length ? '<button class="btn ghost" style="margin-top:12px" onclick="clearFilters()">Clear all filters</button>' : ""}
+      </div>
+    `;
+  } else if (state.viewMode === "grouped") {
+    // Grouped by Category
+    const groups = {};
+    list.forEach(f => {
+      const cat = getFindingCategory(f);
+      if (!groups[cat.id]) groups[cat.id] = { meta: cat, items: [] };
+      groups[cat.id].items.push(f);
+    });
+
+    findingsHTML = Object.values(groups).map(g => `
+      <div style="margin-bottom:24px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--line)">
+          <span style="font-size:18px">${g.meta.icon}</span>
+          <h3 style="margin:0;font-size:15px;font-weight:700;color:var(--text)">${g.meta.label}</h3>
+          <span style="background:rgba(255,255,255,0.08);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">${g.items.length}</span>
+          <span style="color:var(--text-muted);font-size:11.5px;margin-left:auto">${g.meta.desc}</span>
+        </div>
+        ${g.items.map(findingCard).join("")}
+      </div>
+    `).join("");
+  } else {
+    // Priority Feed View (Default)
+    findingsHTML = list.map(findingCard).join("");
+  }
+
+  container.innerHTML = toolbarHTML + findingsHTML;
+  if (searching) {
+    const input = $("#findingSearch");
+    if (input) { input.focus(); input.setSelectionRange(caret, caret); }
+  }
+}
+
+function setCategoryFilter(c) {
+  state.filterCategory = state.filterCategory === c && c !== "all" ? "all" : c;
+  renderTabContent();
+}
+
+function handleSearch(val) {
+  state.searchQuery = val;
+  renderTabContent();
+}
+
+function setViewMode(m) {
+  state.viewMode = m;
+  renderTabContent();
+}
+
+// --- Finding Card Component ---
+function findingCard(f) {
+  const p = getPriority(f);
+  const cat = getFindingCategory(f);
+  const ev = f.evidence || {};
+  const patch = f.patch || f.recommended_patch;
+  const ep = f.endpoint;
+
+  const chain = (ev.chain || []).map(s => `
+    <tr>
+      <td class="code-path">${esc(s.line)}</td>
+      <td style="font-family:var(--font-mono);color:var(--accent-light)">${esc(s.code)}</td>
+      <td style="color:var(--text-secondary)">${esc(s.note)}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <div class="finding-card">
+      <div class="card-top">
+        <span class="priority-tag ${p.cssClass}" title="${p.desc}">${p.code} ${p.label}</span>
+        <span class="category-tag ${cat.cssClass}" title="${cat.desc}">${cat.icon} ${cat.shortLabel}</span>
+        <span class="status-pill st-${f.status}">${esc(f.status.replace(/_/g, ' '))}</span>
+        ${f.verifiable ? '<span style="font-size:11px;color:var(--ok);font-weight:600;display:inline-flex;align-items:center;gap:3px">🧪 Exploit Verifiable</span>' : ''}
+        <span class="card-title">${esc(f.title)}</span>
+        <span class="cwe-tag">${esc((f.cwe || []).join(', '))}</span>
+      </div>
+
+      <div class="card-loc">
+        <span class="code-path">${esc(f.file)}:${esc(f.line)}</span>
+        <button class="copy-btn" data-path="${esc(f.file)}:${esc(f.line)}" onclick="copyText(this.dataset.path)">Copy path</button>
+        ${ep ? `<span class="route-badge">${esc(ep.method)} ${esc(ep.path)}</span>` : ''}
+        <span style="color:var(--text-muted)">· ${esc(f.tool)}/${esc(f.rule_id)}</span>
+      </div>
+
+      <div style="font-size:13px;line-height:1.5;color:var(--text)">${esc(f.message)}</div>
+
+      ${f.attack ? `
+        <div class="attack-box">
+          <span>⚠️</span>
+          <div>
+            <b>Enables Attack:</b> ${esc(f.attack)}
+            ${f.attack_tier ? `<span style="opacity:0.85;margin-left:6px">(Tier ${esc(f.attack_tier)}: ${f.attack_tier === 'A' ? 'direct attack' : 'enabling weakness'})</span>` : ''}
+          </div>
+        </div>
+      ` : ''}
+
+      ${f.code ? `
+        <div style="margin:8px 0;background:#010409;border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 12px;font-family:var(--font-mono);font-size:12px;color:#fca5a5;overflow-x:auto">
+          <code>${esc(f.code)}</code>
+        </div>
+      ` : ''}
+
+      ${chain ? `
+        <details>
+          <summary>
+            <span>Evidence Dataflow Chain (${esc(ev.method)}${ev.llm_used ? ' · LLM Verified' : ''})</span>
+            <span style="font-size:11px">${(ev.chain || []).length} steps</span>
+          </summary>
+          <div class="details-content">
+            <table>
+              <thead><tr><th style="width:50px">Line</th><th>Code Context</th><th>Role in Taint Flow</th></tr></thead>
+              <tbody>${chain}</tbody>
+            </table>
+          </div>
+        </details>
+      ` : ev.summary ? `
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px"><b>Evidence:</b> ${esc(ev.summary)}</div>
+      ` : ''}
+
+      ${patch && patch.diff ? `
+        <details open>
+          <summary>
+            <span>${patchLabel(f)} — ${esc(patch.source)}</span>
+            <button class="copy-btn" data-diff="${esc(patch.diff)}" onclick="event.stopPropagation();copyText(this.dataset.diff)">Copy Diff</button>
+          </summary>
+          <div class="details-content">
+            ${patch.description ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">${esc(patch.description)}</div>` : ''}
+            ${renderDiff(patch.diff)}
+          </div>
+        </details>
+      ` : ''}
+
+      ${renderVerificationAttempts(f.verification)}
+
+      ${f.remediation ? `
+        <div class="remediation-box">
+          <b>Remediation Guide:</b> ${esc(f.remediation)}
+        </div>
+      ` : ''}
+
+      ${f.provenance && f.provenance.commit ? `
+        <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
+          Git blame: last modified in commit <span class="code-path">${esc(f.provenance.commit.substring(0,8))}</span> by <b>${esc(f.provenance.author)}</b> on ${esc(f.provenance.date)}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderDiff(diffText) {
+  if (!diffText) return "";
+  const lines = diffText.split("\n").map(l => {
+    let cls = "";
+    if (l.startsWith("+") && !l.startsWith("+++")) cls = "add";
+    else if (l.startsWith("-") && !l.startsWith("---")) cls = "del";
+    else if (l.startsWith("@@")) cls = "hunk";
+    return `<div class="${cls}">${esc(l)}</div>`;
+  }).join("");
+  return `<div class="diff-view">${lines}</div>`;
+}
+
+function patchLabel(f) {
+  if (!f.patch) return "Recommended patch (not executed)";
+  const ok = (f.verification || []).find(a => a.passed);
+  return ok && ok.patch_source === "dependency-bump"
+    ? "Verified fix (advisory's fixed version)" : "Verified fix (exploit blocked, tests pass)";
+}
+
+function renderVerificationAttempts(v) {
+  if (!v || !v.length) return "";
+  const rows = v.map(a => `
+    <tr>
+      <td>#${a.attempt}</td>
+      <td><span class="code-path">${esc(a.patch_source)}</span></td>
+      <td>${esc(a.exploit_before)}</td>
+      <td>${esc(a.exploit_after)}</td>
+      <td>${esc(a.regression)}</td>
+      <td style="font-weight:700">${a.passed ? '<span style="color:var(--ok)">✅ PASSED</span>' : '<span style="color:var(--bad)">❌ FAILED</span>'}</td>
+    </tr>
+  `).join("");
+
+  return `
+    <details>
+      <summary>
+        <span>Sandbox Verification Log (${v.length} attempt${v.length > 1 ? 's' : ''})</span>
+        ${v.some(a => a.passed) ? '<span style="font-size:11px;color:var(--ok)">Fix verified</span>' : '<span style="font-size:11px;color:var(--warn)">Not verified</span>'}
+      </summary>
+      <div class="details-content">
+        <table>
+          <thead>
+            <tr><th>Attempt</th><th>Patch Engine</th><th>Probe Before</th><th>Probe After</th><th>Test Suite</th><th>Result</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </details>
+  `;
+}
+
+function renderEndpointsTable() {
+  const eps = state.endpoints || [];
+  if (!eps.length) {
+    return `<div style="background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);padding:40px;text-align:center;color:var(--text-muted)">No HTTP route endpoints detected in target project.</div>`;
+  }
+  const rows = eps.map(e => `
+    <tr>
+      <td><b style="color:var(--accent-light)">${esc(e.method)}</b></td>
+      <td style="font-family:var(--font-mono);color:var(--text);font-weight:600">${esc(e.path)}</td>
+      <td>${e.auth ? '<span style="color:var(--ok)">🔒 Required</span>' : '<span style="color:var(--bad)">🔓 Public</span>'}</td>
+      <td>${esc((e.roles || []).join(', ') || '—')}</td>
+      <td>${e.rate_limited ? '<span style="color:var(--ok)">✓ Protected</span>' : '<span style="color:var(--warn)">None</span>'}</td>
+      <td><span class="code-path">${esc(e.file)}:${esc(e.line)}</span></td>
+    </tr>
+  `).join("");
+
+  return `
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden">
+      <table>
+        <thead>
+          <tr><th>Method</th><th>Endpoint Route</th><th>Auth Gate</th><th>Roles</th><th>Rate Limiting</th><th>Code Definition</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+// --- Improved User Input & Feature Selection Panel ---
+function toggleScanConfig(forceOpen) {
+  state.showConfig = forceOpen !== undefined ? forceOpen : !state.showConfig;
+  renderMain();
+}
+
+function renderScanConfigDrawer() {
+  const presetsHTML = (state.presets || []).map(p => `
+    <button class="preset-btn" onclick="selectPreset('${esc(p.path)}')">
+      <span>⚡ ${esc(p.name)}</span>
+      <span style="font-size:10px;color:var(--accent-light)">[${esc(p.badge)}]</span>
+    </button>
+  `).join("");
+
+  return `
+    <div class="config-panel">
+      <div class="config-header">
+        <h3>🚀 Launch New Security Review</h3>
+        <button class="btn ghost sm" onclick="toggleScanConfig(false)">✕ Close</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Project Directory Path to Scan</label>
+        <input type="text" id="cfgProject" class="form-control" placeholder="Absolute path to codebase folder (e.g. D:\\projects\\my-app)" />
+        <div class="preset-pills">
+          <span style="font-size:11px;color:var(--text-muted);align-self:center">Sample Targets:</span>
+          ${presetsHTML || `
+            <button class="preset-btn" onclick="selectPreset('examples/flask-vuln')">Flask Vulnerable App</button>
+            <button class="preset-btn" onclick="selectPreset('examples/llm-streamlit-vuln')">Streamlit AI App</button>
+          `}
+        </div>
+      </div>
+
+      <div style="margin:16px 0 8px;font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.06em">
+        Scan Profiles & Feature Selection
+      </div>
+
+      <div class="preset-pills" style="margin-bottom:14px">
+        <button class="preset-btn" onclick="applyProfile('full')">🛡️ Full Verified Scan (Docker + Ground)</button>
+        <button class="preset-btn" onclick="applyProfile('fast')">⚡ Fast Audit (Detection Only)</button>
+        <button class="preset-btn" onclick="applyProfile('ablation')">🧪 Grounding Ablation (No Ground)</button>
+      </div>
+
+      <div class="feature-grid">
+        <label class="feature-card">
+          <input type="checkbox" id="cfgVerify" checked />
+          <div class="feature-info">
+            <div class="feature-title">Dynamic Exploit Verification</div>
+            <div class="feature-desc">Proves fixes by executing exploit oracles in an isolated sandbox before reporting.</div>
+          </div>
+        </label>
+
+        <label class="feature-card">
+          <input type="checkbox" id="cfgGround" checked />
+          <div class="feature-info">
+            <div class="feature-title">Grounding Engine (Prune False Positives)</div>
+            <div class="feature-desc">Verifies Semgrep taint traces, sanitizers & AST dataflow to eliminate false positives.</div>
+          </div>
+        </label>
+
+        <label class="feature-card">
+          <input type="checkbox" id="cfgAiApp" checked />
+          <div class="feature-info">
+            <div class="feature-title">AI & LLM App Security</div>
+            <div class="feature-desc">OWASP Top 10 for LLM: prompt injection, RAG poisoning, and improper output handling.</div>
+          </div>
+        </label>
+
+        <label class="feature-card">
+          <input type="checkbox" id="cfgAccessControl" checked />
+          <div class="feature-info">
+            <div class="feature-title">Access Control & Endpoint Analysis</div>
+            <div class="feature-desc">Discovers HTTP routes, verifies RBAC roles, checks IDOR and unauthenticated endpoints.</div>
+          </div>
+        </label>
+
+        <label class="feature-card">
+          <input type="checkbox" id="cfgSecrets" checked />
+          <div class="feature-info">
+            <div class="feature-title">Secrets & Cryptography Scanner</div>
+            <div class="feature-desc">Detects hardcoded API keys, JWT misconfigurations, and weak password hashes.</div>
+          </div>
+        </label>
+
+        <label class="feature-card">
+          <input type="checkbox" id="cfgSupplyChain" checked />
+          <div class="feature-info">
+            <div class="feature-title">Supply Chain & Dependencies</div>
+            <div class="feature-desc">Checks vulnerable packages against OSV advisory database and audits lockfiles.</div>
+          </div>
+        </label>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">AI / LLM Model Backend</label>
+          <select id="cfgProvider" class="form-control">
+            <option value="">Disabled (100% Deterministic & Free)</option>
+            <option value="fallback" selected>Fallback (OpenRouter &gt; Gemini &gt; Local)</option>
+            <option value="openrouter">OpenRouter API</option>
+            <option value="gemini">Google Gemini API</option>
+            <option value="local">Ollama (Local Offline)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Sandbox Environment</label>
+          <select id="cfgSandbox" class="form-control">
+            <option value="docker" selected>Docker Container (Isolated & Safe)</option>
+            <option value="local">Local Dev Host (Not isolated)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
+        <div id="cfgError" style="font-size:12px;color:var(--bad)"></div>
+        <button class="btn primary" id="btnLaunch" onclick="launchScan()">🚀 Start Security Review</button>
+      </div>
+    </div>
+  `;
+}
+
+function selectPreset(path) {
+  const el = $("#cfgProject");
+  if (el) el.value = path;
+}
+
+function applyProfile(prof) {
+  if (prof === "full") {
+    $("#cfgVerify").checked = true;
+    $("#cfgGround").checked = true;
+    $("#cfgSandbox").value = "docker";
+  } else if (prof === "fast") {
+    $("#cfgVerify").checked = false;
+    $("#cfgGround").checked = true;
+  } else if (prof === "ablation") {
+    $("#cfgVerify").checked = false;
+    $("#cfgGround").checked = false;
+  }
+}
+
+async function launchScan() {
+  const project = ($("#cfgProject")?.value || "").trim();
+  const errorEl = $("#cfgError");
+  if (!project) {
+    if (errorEl) errorEl.textContent = "Please enter or select a project directory path to scan.";
+    return;
+  }
+
+  const options = {
+    "verify.enabled": $("#cfgVerify")?.checked ?? true,
+    "verify.sandbox": $("#cfgSandbox")?.value ?? "docker",
+    "llm.enabled": !!$("#cfgProvider")?.value,
+    "detect.ai_app": $("#cfgAiApp")?.checked ?? true,
+    "detect.access_control": $("#cfgAccessControl")?.checked ?? true,
+    "detect.secrets": $("#cfgSecrets")?.checked ?? true,
+    "detect.supply_chain": $("#cfgSupplyChain")?.checked ?? true,
+    "permissions.mode": "ask"
+  };
+  if ($("#cfgProvider")?.value) {
+    options["llm.provider"] = $("#cfgProvider").value;
+  }
+
+  const noGround = !($("#cfgGround")?.checked ?? true);
+
+  const btn = $("#btnLaunch");
+  if (btn) { btn.disabled = true; btn.textContent = "Initializing Review..."; }
+  if (errorEl) errorEl.textContent = "";
+
+  try {
+    const res = await fetch("/api/scan", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ project, options, no_ground: noGround })
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      if (errorEl) errorEl.textContent = d.detail || `Failed to start scan (HTTP ${res.status})`;
+      if (btn) { btn.disabled = false; btn.textContent = "🚀 Start Security Review"; }
+      return;
+    }
+    const data = await res.json();
+    state.showConfig = false;
+    await loadRuns();
+    if (data.run_id) openRun(data.run_id);
+  } catch (e) {
+    if (errorEl) errorEl.textContent = "Could not reach the backend dashboard server.";
+    if (btn) { btn.disabled = false; btn.textContent = "🚀 Start Security Review"; }
+  }
+}
+
+async function decide(pid, decision, remember = false) {
+  try {
+    await api(`/api/permissions/${pid}/${decision}?remember=${remember ? 'true' : 'false'}`, { method: "POST" });
+    refresh();
+  } catch (e) {}
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    alert("Copied to clipboard!");
+  }).catch(() => {});
+}
+
+function exportFindingsJSON() {
+  if (!state.findings) return;
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.findings, null, 2));
+  const dlAnchor = document.createElement('a');
+  dlAnchor.setAttribute("href", dataStr);
+  dlAnchor.setAttribute("download", `secreview-findings-${state.runId}.json`);
+  dlAnchor.click();
+}
+
+// Start
+init();
+setInterval(loadRuns, 4000);
 </script>
+
 </body>
 </html>

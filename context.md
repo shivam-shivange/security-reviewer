@@ -180,6 +180,17 @@ Not done: JavaScript/Java LLM-app rules (Python only so far).
   path-traversal verify on Docker/Linux, not Windows local mode (expected).
 
 ## 8. Change log
+- 2026-10-24: Ablation (`--no-ground`) fixed: it used to wipe Detect's own decisions (heuristic evidence
+  chains -> "none", the constant-command discard revived). Now it skips only Ground's checks.
+- 2026-10-24: Dashboard/report fixes on top of the user's UI redesign:
+  - **Stages:** stages switched off are recorded as `skipped` (Ground in ablation, Verify in detection-only,
+    Provenance outside a git root) and drawn as skipped, not "DONE".
+  - **Filters:** active filters are shown with clear buttons; category counts follow the other filters;
+    search keeps focus while typing.
+  - **XSS:** fixed in the Copy Diff button (diff was put into an onclick attribute).
+  - **Wording:** no "Docker"/"proven by exploit" claims unless true; Tier A/B worded correctly.
+  - **Report:** status and category filter rows now combine; the header shows `served_by`.
+  - Tests in `tests/test_report_ui.py`; 38 tests pass.
 - 2026-10-24: **LLM fallback chain decided and built**: `llm.provider = "fallback"` (default; also in `.env`),
   order OpenRouter → Gemini → local Qwen (`llm.fallback_order`), 300 s cooldown for a failed provider,
   invalid JSON falls through without cooldown, declined cloud consent leaves only local. `llm/fallback.py`,

@@ -103,3 +103,8 @@ def test_ablation_without_ground(flask_app, scratch):
                                    ground_enabled=False)
     # With grounding off, nothing is discarded as a false positive.
     assert summary["discarded"] == 0
+    # Switched-off stages are recorded as skipped, not done, so the dashboard cannot show them as complete.
+    stages = {s["name"]: s for s in store.get_run(run_id)["stages"]}
+    assert stages["ground"]["status"] == "skipped" and "Ground off" in stages["ground"]["note"]
+    assert stages["verify"]["status"] == "skipped" and "Verify off" in stages["verify"]["note"]
+    assert stages["detect"]["status"] == "done" and stages["provenance"]["status"] == "done"

@@ -176,11 +176,14 @@ def run_ground(ctx: RunContext, findings: list[Finding], gate: LLMGate, enabled:
     total = len(findings)
     for i, f in enumerate(findings, 1):
         if not enabled:   # ablation: Detect -> Patch -> Verify without grounding
-            if f.vuln_class != "general_bug":
-                f.status = Status.GROUNDED.value
-                f.evidence = Evidence(method="none", summary="grounding disabled (ablation)", confidence=0.0)
-            else:
+            if f.status in (Status.DISCARDED.value, Status.NEEDS_REVIEW.value):
+                pass   # decided by Detect itself (constant command, heuristic analyzers): not Ground's call
+            elif f.vuln_class == "general_bug":
                 f.status = Status.REPORT_ONLY.value
+            else:
+                f.status = Status.GROUNDED.value
+                f.evidence = f.evidence or Evidence(method="none", summary="grounding disabled (ablation)",
+                                                    confidence=0.0)
         else:
             ground_finding(ctx, gate, f, mode)
         ctx.store.save_finding(ctx.run_id, f)
