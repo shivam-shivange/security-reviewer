@@ -180,6 +180,9 @@ Not done: JavaScript/Java LLM-app rules (Python only so far).
   path-traversal verify on Docker/Linux, not Windows local mode (expected).
 
 ## 8. Change log
+- 2026-10-23: **LLM models chosen by bake-off** (see `docs/llm_models.md`): OpenRouter
+  `poolside/laguna-s-2.1:free` (4/4, main), Gemini `gemini-3.5-flash-lite` (4/4, fastest), Ollama
+  `gemma3:4b` (provisional; small local models are unreliable). Set in `config/default.toml` and `.env`.
 - 2026-10-23: `plan.md` created: phase status (~55% overall) and milestone timeline M1–M7 to the
   final defence (assumed late April 2027; dates to be matched to the college calendar).
 - 2026-10-23: main pushed (pre-today code); `new_updates` branch pushed with today's work.
