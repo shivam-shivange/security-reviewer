@@ -1,7 +1,7 @@
 # Project Context — Self-Verifying AI Security Reviewer
 
 Running reference file. Update it whenever a decision is made, scope changes, or a milestone lands.
-Last updated: 2026-10-06
+Last updated: 2026-10-23
 
 ## 1. What this project is
 B.Tech final-year project (PCCOE Pune, CSE AI&ML, group GA16 — Shivam Shivange, Vinayak Pawara,
@@ -135,7 +135,39 @@ built-in smoke-test fixture (user informed).
 - Dashboard concurrency: runs one scan at a time; orphaned "running" runs are swept to failed on
   restart (fixed 2026-10-07). npm audit / pip-audit now time-bounded (fixed 2026-10-07).
 
+### Gap analysis vs. Automotive-Fault-Diagnosis-Agent (run 20261022-113222-5d1f8e, reviewed 2026-10-23)
+Target = Streamlit + LangGraph + Groq LLM + Qdrant RAG app. Tool reported 11 findings (2 secrets in a
+git-ignored `.env`, 1 cmdi FP on a constant `os.system`, 8 lint nits). Manual review found the real
+issues the tool **missed**: prompt injection (user free-text, unvalidated DTCs and freeze-frame values
+go straight into the LLM prompt; LLM output is chained into a second LLM), indirect prompt injection /
+RAG poisoning (`data/scraper.py` web content → knowledge base → prompt), LLM output rendered as
+markdown (`st.markdown`/`st.info`), unbounded consumption (no limit on DTC count or freeze-frame length,
+no auth or rate limiting, 2 paid LLM calls per submit), `showErrorDetails = true` + raw exception
+shown in the UI, unpinned `requirements.txt` with the wrong package (`dataset` instead of `datasets`),
+unpinned HF dataset/model downloads (Bandit B615 found but filed as `general_bug`), one Qdrant key
+used for both writing (ingest) and reading (app).
+Tool-side gaps: no LLM/AI rule pack, no Streamlit/Gradio source model (endpoints = 0), secrets in
+git-ignored/uncommitted files rated high, supply-chain issues downgraded to general_bug, dependency scan
+silent on unpinned manifests, misleading `patch_unverified` status for findings with no patch.
+**DONE 2026-10-23 (all non-LLM improvements, user-approved):** `detect/ai_app.py` (cross-file AI-app
+analyzer: prompt injection + agent chaining, LLM output -> markdown/HTML, RAG poisoning via shared data
+files + shared write key, unbounded LLM consumption, Streamlit/Gradio endpoints, `.streamlit/config.toml`,
+exception display), `rules/semgrep_src/python/llm.yaml` (same-function LLM taint + HF/torch.hub supply
+chain), `detect/supply_chain.py` (unpinned requirements, declared-vs-imported mismatch, npm wildcards /
+lockfile), git-aware secret grading + dot-dir config scan, Bandit constant-command FP -> discarded, B615 ->
+supply_chain, `report_only` instead of `patch_unverified` when no patch exists, `patch/config_fixers.py`.
+New classes: supply_chain, prompt_injection, rag_poisoning, llm_output_handling, llm_resource_abuse
+(`heuristic: true` => needs_review). Fixture `examples/llm-streamlit-vuln` + `tests/test_ai_and_supply_chain.py`.
+Result on the Automotive project: 15 security findings (was 3, 1 FP); all 7 manual gaps now detected.
+Not done: JavaScript/Java LLM-app rules (Python only so far).
+
 ## 7. Gotchas learned (save time later)
+- **Git object files are read-only on Windows** -> `shutil.rmtree(ignore_errors=True)` silently leaves
+  git-initialised test dirs behind and the next run fails with FileExistsError. Tests use `_force_rmtree`.
+- Streamlit defaults: `client.showErrorDetails` = "full" and `server.address` unset (all interfaces), so a
+  Streamlit app with no config leaks tracebacks and listens on the LAN.
+- The tool's LLM prompts are small (~0.8k tokens avg, 1.2k max: a +/-25-line slice + ~1.1k-char system
+  prompt); output ~0.2k (ground) / ~0.4k (patch). Use these numbers for cost estimates.
 - **Semgrep skips dot-directories and respects the enclosing git repo's `.gitignore`.** Scanning a
   copy placed under a `.`-prefixed or git-ignored folder returns 0 findings. Tests copy the sample
   into a non-ignored dir and `git init` it.
@@ -148,6 +180,7 @@ built-in smoke-test fixture (user informed).
   path-traversal verify on Docker/Linux, not Windows local mode (expected).
 
 ## 8. Change log
+- 2026-10-23: AI/LLM + supply-chain + git-aware-secrets detection added (see 5b gap analysis). 28 tests pass.
 - 2026-10-06: **Initial implementation committed** (commit 5979150, 104 files, local only — NOT
   pushed to the public remote yet, pending user confirmation; .docx kept out of git — contain PII).
   End-to-end pipeline working; 17 tests pass.

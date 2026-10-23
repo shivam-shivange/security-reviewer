@@ -23,8 +23,13 @@ insecure deserialization, prototype pollution); configuration & crypto (disabled
 missing rate limiting, weak/plaintext credential storage, hardcoded secrets, weak crypto, insecure
 randomness, JWT misuse, unrestricted upload, CORS, debug mode); access control & API leakage (open
 endpoints, missing/inconsistent role checks, IDOR/BOLA, mass assignment, client-controlled authz,
-sensitive-data exposure, error/secret leakage); vulnerable dependencies; and a lower-confidence
-general-bug tier (Ruff / ESLint / PMD). See [rules/taxonomy.yaml](rules/taxonomy.yaml).
+sensitive-data exposure, error/secret leakage); vulnerable dependencies and supply-chain weaknesses
+(unpinned requirements, declared-vs-imported package mismatches, unpinned model / dataset downloads,
+`trust_remote_code`); AI / LLM applications (prompt injection incl. agent-to-agent chaining, unsafe
+LLM output handling, RAG / knowledge-base poisoning, unbounded LLM consumption, Streamlit / Gradio
+config and UI surface — found by a cross-file analyzer, reported as *needs review*); and a
+lower-confidence general-bug tier (Ruff / ESLint / PMD). Secrets are graded by git state: committed
+=> critical (rotate), git-ignored and never committed => info. See [rules/taxonomy.yaml](rules/taxonomy.yaml).
 
 ## Install
 

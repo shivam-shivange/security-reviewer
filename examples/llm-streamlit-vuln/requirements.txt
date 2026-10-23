@@ -1,0 +1,6 @@
+streamlit
+langchain-openai
+qdrant-client
+sentence-transformers
+dataset
+requests==2.32.3

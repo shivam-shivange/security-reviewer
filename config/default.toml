@@ -43,6 +43,8 @@ bandit = true
 secrets = true
 dependencies = true
 access_control = true
+supply_chain = true           # unpinned / mismatched dependencies, lockfiles
+ai_app = true                 # LLM apps: prompt injection, output handling, RAG poisoning, Streamlit/Gradio
 general_bugs = true
 
 [ground]

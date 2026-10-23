@@ -1,4 +1,8 @@
-"""Regex secret scanner + configuration-file checks (Spring properties, Django settings, .env)."""
+"""Regex secret scanner + configuration-file checks (Spring properties, Django settings, .env).
+
+Secret findings are graded by git state: a secret that was ever committed is critical (it must be
+rotated), one in a git-ignored, never-committed file is informational (that is where secrets belong).
+"""
 
 from __future__ import annotations
 
@@ -11,7 +15,7 @@ from pathlib import Path
 
 import yaml
 
-from .. import ROOT
+from .. import ROOT, tools
 from ..context import RunContext
 from ..discovery import EXT_LANG, is_test_file, walk
 from ..models import Finding
@@ -52,13 +56,15 @@ def scan_secrets(ctx: RunContext) -> list[Finding]:
     findings: list[Finding] = []
     seen: set[tuple] = set()
 
-    for path in walk(ctx.project, exclude, ctx.config.get("scan.max_file_kb", 1024)):
+    # walk() skips dot-directories, but some of them hold config with secrets (.streamlit, .github...)
+    dot_files = {p for g in rules.get("dot_dir_globs", []) for p in ctx.project.glob(g) if p.is_file()}
+    for path in [*walk(ctx.project, exclude, ctx.config.get("scan.max_file_kb", 1024)), *sorted(dot_files)]:
         name = path.name
         relp = path.relative_to(ctx.project).as_posix()
         if _matches(name, rules["skip_globs"]) or (not include_tests and is_test_file(relp)):
             continue
         is_source = path.suffix.lower() in EXT_LANG
-        is_config = _matches(name, rules["config_globs"])
+        is_config = _matches(name, rules["config_globs"]) or path in dot_files
         if not (is_source or is_config):
             continue
         try:
@@ -107,4 +113,39 @@ def scan_secrets(ctx: RunContext) -> list[Finding]:
                     file=relp, line=line, tool="config", language="config", message=check["message"],
                     code=lines[line - 1] if line - 1 < len(lines) else "",
                     extra={"confidence": "high", "taint": False}))
+    _grade_by_git(ctx, [f for f in findings if f.vuln_class == "hardcoded_secret"])
     return findings
+
+
+def _git_lines(ctx: RunContext, *args: str) -> set[str] | None:
+    res = tools.run(["git", *args], cwd=ctx.project, timeout=120)
+    return {line.strip() for line in res.stdout.splitlines() if line.strip()} if res.ok else None
+
+
+def _grade_by_git(ctx: RunContext, findings: list[Finding]) -> None:
+    """Committed secret -> critical (rotate it); ignored and never committed -> info."""
+    if not findings or not (ctx.project / ".git").exists():
+        return
+    tracked = _git_lines(ctx, "ls-files")
+    if tracked is None:
+        return
+    ever_added = _git_lines(ctx, "log", "--all", "--format=", "--name-only", "--diff-filter=A") or set()
+    ignored: dict[str, bool] = {}
+    for f in findings:
+        if f.file in tracked or f.file in ever_added:
+            state = "committed"
+            f.severity = "critical"
+            note = "committed to git history - rotate the secret; deleting the file does not remove it from history"
+        else:
+            if f.file not in ignored:
+                ignored[f.file] = tools.run(["git", "check-ignore", "-q", f.file], cwd=ctx.project, timeout=30).ok
+            if ignored[f.file]:
+                state = "ignored"
+                f.severity = "info"
+                note = ("file is git-ignored and was never committed (the right place for a secret) - "
+                        "keep it out of images, backups and shared folders")
+            else:
+                state = "untracked"
+                note = "not committed yet, but the file is NOT git-ignored - add it to .gitignore"
+        f.message = f"{f.message} ({note})"
+        f.extra["git"] = state

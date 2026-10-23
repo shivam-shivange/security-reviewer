@@ -4,7 +4,9 @@ Verifies the four stages run and that known classes are detected, grounded and (
 works on this OS) verified. Requires semgrep; skips if absent.
 """
 
+import os
 import shutil
+import stat
 import sys
 from pathlib import Path
 
@@ -20,16 +22,28 @@ from secreview.pipeline import run_pipeline              # noqa: E402
 from secreview.store import Store                        # noqa: E402
 
 
+def _force_rmtree(path: Path) -> None:
+    """rmtree that also removes read-only files (git marks its object files read-only on Windows)."""
+    def clear_readonly(func, p, _exc):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except OSError:
+            pass   # still open (e.g. the run's SQLite db); the next run's setup removes it
+    if path.exists():
+        shutil.rmtree(path, onexc=clear_readonly)
+
+
 @pytest.fixture
 def scratch(request):
     """A scratch dir under the repo, not the system temp, and with no leading dot in any path
     component (semgrep skips dot-directories; %TEMP% on Windows triggers a Defender-scan slowdown).
     Each test gets its own subdir to avoid cross-test cleanup races on Windows (locked SQLite files)."""
     base = ROOT / "pytest_scan_tmp" / request.node.name
-    shutil.rmtree(base, ignore_errors=True)
+    _force_rmtree(base)
     base.mkdir(parents=True, exist_ok=True)
     yield base
-    shutil.rmtree(base, ignore_errors=True)
+    _force_rmtree(base)
 
 
 @pytest.fixture

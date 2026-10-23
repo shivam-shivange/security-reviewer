@@ -32,3 +32,6 @@ tools/.tmp
 
 # project synopsis docs contain student names/PRNs - keep out of the public repo
 *.docx
+
+# test scratch dirs (a locked SQLite file can outlive teardown on Windows)
+pytest_scan_tmp/

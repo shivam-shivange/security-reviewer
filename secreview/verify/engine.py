@@ -41,8 +41,7 @@ def verify_finding(ctx: RunContext, gate: LLMGate, f: Finding, runner: Runner) -
         cands = candidates(ctx, gate, f)
         if cands:
             f.recommended_patch = cands[0]
-        f.status = Status.PATCH_UNVERIFIED.value
-        f.extra["unverifiable_reason"] = "no exploit oracle for this class (rule-based finding)"
+        _unverified(f, "no exploit oracle for this class (rule-based finding)")
         return
 
     max_retries = int(ctx.config.get("verify.max_retries", 3))
@@ -53,13 +52,12 @@ def verify_finding(ctx: RunContext, gate: LLMGate, f: Finding, runner: Runner) -
         baseline = runner.run_oracle(env, f, patched=False)
         if baseline.result != "vulnerable":
             # Could not reproduce the issue in the sandbox -> cannot prove a fix. Keep as grounded-unverified.
-            f.status = Status.PATCH_UNVERIFIED.value
-            f.extra["unverifiable_reason"] = f"oracle did not trigger on original code ({baseline.result}: {baseline.reason})"
             f.verification.append(VerificationAttempt(0, "baseline", exploit_before=baseline.result,
                                                       passed=False, log=baseline.log[-4000:]))
             cands = candidates(ctx, gate, f)
             if cands:
                 f.recommended_patch = cands[0]
+            _unverified(f, f"oracle did not trigger on original code ({baseline.result}: {baseline.reason})")
             return
 
         for attempt in range(1, max_retries + 1):
@@ -100,22 +98,29 @@ def verify_finding(ctx: RunContext, gate: LLMGate, f: Finding, runner: Runner) -
                 feedback = va.log
 
         # retries exhausted: keep the best patch as recommended, unverified
-        f.status = Status.PATCH_UNVERIFIED.value
         if f.verification and not f.recommended_patch:
             last = candidates(ctx, gate, f, tried=set())
             if last:
                 f.recommended_patch = last[0]
-        f.extra.setdefault("unverifiable_reason", "no candidate patch passed verification within the retry limit")
+        _unverified(f, f.extra.get("unverifiable_reason")
+                    or "no candidate patch passed verification within the retry limit")
     finally:
         runner.cleanup(env)
+
+
+def _unverified(f: Finding, reason: str) -> None:
+    """Could not prove a fix. `patch_unverified` only when a patch exists; with no patch at all the
+    finding is `report_only` (follow the remediation text), so the label never promises a patch."""
+    has_patch = bool(f.patch or f.recommended_patch)
+    f.status = Status.PATCH_UNVERIFIED.value if has_patch else Status.REPORT_ONLY.value
+    f.extra["unverifiable_reason"] = reason if has_patch else f"{reason}; no automatic patch available"
 
 
 def _verify_dependency(ctx: RunContext, f: Finding, runner: Runner) -> None:
     from ..patch.dependency import bump
     patch = bump(ctx.project, f)
     if not patch:
-        f.status = Status.PATCH_UNVERIFIED.value
-        f.extra["unverifiable_reason"] = "no fixed version available in the advisory"
+        _unverified(f, "no fixed version available in the advisory")
         return
     # The fix is a version bump to a version the advisory marks as fixed: accept deterministically,
     # and (in docker mode) optionally re-run the scanner. We trust the advisory's fixed-version here.
@@ -133,8 +138,7 @@ def run_verify(ctx: RunContext, findings: list[Finding], gate: LLMGate) -> None:
                 cands = candidates(ctx, gate, f)
                 if cands:
                     f.recommended_patch = cands[0]
-                f.status = Status.PATCH_UNVERIFIED.value
-                f.extra["unverifiable_reason"] = "verify stage disabled"
+                _unverified(f, "verify stage disabled")
         return
     targets = [f for f in findings if f.status == Status.GROUNDED.value]
     if not targets:
@@ -148,8 +152,7 @@ def run_verify(ctx: RunContext, findings: list[Finding], gate: LLMGate) -> None:
                 verify_finding(ctx, gate, f, runner)
             except Exception as exc:
                 ctx.warn(f"verification crashed for {f.id}: {exc}")
-                f.status = Status.PATCH_UNVERIFIED.value
-                f.extra["unverifiable_reason"] = f"verification error: {exc}"
+                _unverified(f, f"verification error: {exc}")
             ctx.store.save_finding(ctx.run_id, f)
             ctx.progress(i, len(targets), f"{f.status}: {f.vuln_class}")
     finally:

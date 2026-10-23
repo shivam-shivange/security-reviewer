@@ -10,14 +10,17 @@ from ..discovery import ProjectInfo, is_test_file
 from ..models import Endpoint, Finding
 from ..taxonomy import enrich
 from .access import analyze_access
+from .ai_app import analyze_ai_app
 from .bandit_runner import run_bandit
 from .dependencies import scan_dependencies
 from .linters import run_eslint, run_pmd, run_ruff
 from .secrets import scan_secrets
 from .semgrep_runner import run_semgrep
+from .supply_chain import scan_supply_chain
 
 # When two tools report the same class on the same line, keep the richer one.
-TOOL_RANK = {"semgrep": 0, "access-analyzer": 1, "config": 2, "secrets": 3, "bandit": 4,
+TOOL_RANK = {"semgrep": 0, "access-analyzer": 1, "ai-analyzer": 1, "supply-chain": 2, "config": 2, "secrets": 3,
+             "bandit": 4,
              "osv-scanner": 0, "pip-audit": 1, "npm-audit": 1, "ruff": 5, "eslint": 5, "pmd": 5}
 
 
@@ -77,7 +80,9 @@ def run_detect(ctx: RunContext, info: ProjectInfo) -> tuple[list[Finding], list[
         ("bandit", cfg.get("detect.bandit", True) and "python" in langs),
         ("secrets", cfg.get("detect.secrets", True)),
         ("dependencies", cfg.get("detect.dependencies", True)),
+        ("supply-chain", cfg.get("detect.supply_chain", True)),
         ("access-control", cfg.get("detect.access_control", True) and langs),
+        ("ai-app", cfg.get("detect.ai_app", True) and "python" in langs),
         ("general-bugs", cfg.get("detect.general_bugs", True) and cfg.get("general_bugs.report", True) and langs),
     ] if on]
     ctx.progress(0, len(steps))
@@ -93,9 +98,16 @@ def run_detect(ctx: RunContext, info: ProjectInfo) -> tuple[list[Finding], list[
                 raw += scan_secrets(ctx)
             elif step == "dependencies":
                 raw += scan_dependencies(ctx, info)
+            elif step == "supply-chain":
+                raw += scan_supply_chain(ctx, info)
             elif step == "access-control":
-                endpoints, acc = analyze_access(ctx, info)
+                eps, acc = analyze_access(ctx, info)
+                endpoints += eps
                 raw += acc
+            elif step == "ai-app":
+                eps, ai = analyze_ai_app(ctx, info)
+                endpoints += eps
+                raw += ai
             elif step == "general-bugs":
                 if "python" in langs:
                     raw += run_ruff(ctx, _module_targets(ctx, info, "python"))

@@ -11,7 +11,7 @@ from __future__ import annotations
 from ..context import RunContext
 from ..llm.gate import LLMGate
 from ..models import Finding, Patch, Status
-from . import java_fixers, js_fixers, py_fixers  # noqa: F401  (register templates)
+from . import config_fixers, java_fixers, js_fixers, py_fixers  # noqa: F401  (register templates)
 from .base import FixContext, fixers_for, make_patch, syntax_ok
 from .dependency import bump
 from .llm_patch import llm_candidates
@@ -104,5 +104,5 @@ def recommend_general_bug(ctx: RunContext, gate: LLMGate, f: Finding) -> None:
 def run_patch_recommendations(ctx: RunContext, gate: LLMGate, findings: list[Finding]) -> None:
     """For findings that cannot be exploit-verified, attach a recommended (unverified) patch."""
     for f in findings:
-        if f.status == Status.REPORT_ONLY.value:
+        if f.status == Status.REPORT_ONLY.value and f.vuln_class == "general_bug":
             recommend_general_bug(ctx, gate, f)

@@ -28,6 +28,8 @@ CWE_TO_CLASS = {
     "CWE-639": "idor", "CWE-915": "mass_assignment", "CWE-807": "client_controlled_authz",
     "CWE-200": "sensitive_data_exposure", "CWE-359": "sensitive_data_exposure",
     "CWE-209": "error_leakage", "CWE-532": "sensitive_logging", "CWE-1104": "vulnerable_dependency",
+    "CWE-494": "supply_chain", "CWE-829": "supply_chain", "CWE-1357": "supply_chain",
+    "CWE-1427": "prompt_injection", "CWE-1426": "llm_output_handling",
 }
 
 
@@ -46,6 +48,11 @@ def class_for_cwe(cwes: list[str]) -> str | None:
         if key in CWE_TO_CLASS:
             return CWE_TO_CLASS[key]
     return None
+
+
+def is_heuristic(vuln_class: str) -> bool:
+    """Classes found by cross-file heuristics: never auto-confirmed, always need a human check."""
+    return bool(info(vuln_class).get("heuristic", False))
 
 
 def enrich(f: Finding) -> Finding:

@@ -343,6 +343,63 @@ vulnerable_dependency:
   verifiable: true
   remediation: Upgrade to the fixed version reported by the advisory; pin and audit dependencies.
 
+supply_chain:
+  title: Supply-Chain Integrity Weakness
+  cwe: [CWE-494, CWE-829, CWE-1357]
+  category: dependency
+  severity: medium
+  attack: Supply chain attacks (typosquatting, hijacked releases, tampered models / datasets)
+  attack_tier: B
+  verifiable: false
+  remediation: Pin every dependency to an exact version (ideally with hashes or a lockfile), make sure the declared package is the one the code imports, and pin model / dataset downloads to a revision (commit hash).
+
+# --- AI / LLM application classes (OWASP Top 10 for LLM Applications 2025) --------------------
+# `heuristic: true` => found by cross-file analysis, not proven by execution; status needs_review.
+
+prompt_injection:
+  title: Prompt Injection
+  cwe: [CWE-1427]
+  category: injection
+  severity: high
+  attack: Prompt injection (LLM hijacking, unsafe or false output, data exfiltration)
+  attack_tier: A
+  verifiable: false
+  heuristic: true
+  remediation: Validate and length-limit every value before it enters a prompt (reject what fails, do not pass it "anyway"), keep user text in a clearly delimited data section separate from instructions, never feed raw LLM output into another prompt without validating it against a schema, and treat the model's answer as untrusted.
+
+rag_poisoning:
+  title: RAG / Knowledge-Base Poisoning
+  cwe: [CWE-1427, CWE-345]
+  category: injection
+  severity: medium
+  attack: Indirect prompt injection and misinformation through poisoned retrieval data
+  attack_tier: B
+  verifiable: false
+  heuristic: true
+  remediation: Treat fetched content as untrusted - strip markup and instruction-like text, record the source and a content hash, review or allowlist sources before ingest, and use a read-only vector-store key in the serving app.
+
+llm_output_handling:
+  title: Improper LLM Output Handling
+  cwe: [CWE-1426, CWE-79]
+  category: injection
+  severity: medium
+  attack: Phishing links, data exfiltration through rendered images/links, code execution when output is executed
+  attack_tier: B
+  verifiable: false
+  heuristic: true
+  remediation: Validate LLM output against a schema (types, lengths, allowed values) before use; render it as plain text (st.text, st.code, escaped HTML) instead of markdown/HTML; never pass it to eval/exec/shell/SQL.
+
+llm_resource_abuse:
+  title: Unbounded LLM Consumption
+  cwe: [CWE-770, CWE-400]
+  category: configuration
+  severity: medium
+  attack: Denial of wallet / service (paid LLM calls triggered by anyone who can reach the app)
+  attack_tier: B
+  verifiable: false
+  heuristic: true
+  remediation: Put the app behind authentication, add per-user rate limits and a daily budget, cap the size and number of inputs (max_chars, list length), and bind the server to localhost unless it must be public.
+
 general_bug:
   title: General Code Bug
   cwe: []

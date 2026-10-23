@@ -20,6 +20,7 @@ from .llm.base import LLMError
 from .llm.gate import LLMGate
 from .models import Evidence, EvidenceStep, Finding, Status
 from .slicer import get_slice
+from .taxonomy import is_heuristic
 
 PROMPT = (ROOT / "prompts" / "ground.md").read_text(encoding="utf-8")
 CONF = {"high": 0.9, "medium": 0.7, "low": 0.5}
@@ -123,10 +124,11 @@ def ground_finding(ctx: RunContext, gate: LLMGate, f: Finding, mode: str) -> Non
     if f.vuln_class == "general_bug":
         f.status = Status.REPORT_ONLY.value
         return
-    if f.tool == "access-analyzer":
+    if f.tool == "access-analyzer" or is_heuristic(f.vuln_class):
         f.status = Status.NEEDS_REVIEW.value
-        f.evidence = Evidence(method="endpoint-analysis", summary=f.message, confidence=0.6,
-                              chain=[EvidenceStep(f.file, f.line, f.code, "route")])
+        if f.evidence is None:
+            f.evidence = Evidence(method="endpoint-analysis", summary=f.message, confidence=0.6,
+                                  chain=[EvidenceStep(f.file, f.line, f.code, "route")])
         if mode == "always":
             llm_ground(ctx, gate, f)
             if f.status == Status.GROUNDED.value:

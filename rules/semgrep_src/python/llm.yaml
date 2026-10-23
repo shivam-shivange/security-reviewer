@@ -1,0 +1,111 @@
+# Python AI / LLM rules: prompt injection, unsafe LLM output handling, model supply chain.
+# Same-function flows only; cross-file flows are covered by secreview/detect/ai_app.py.
+rules:
+  - id: py-llm-prompt-from-user-input
+    mode: taint
+    languages: [python]
+    severity: ERROR
+    message: User input reaches an LLM prompt without validation or delimiting (prompt injection).
+    metadata: { class: prompt_injection, confidence: medium }
+    pattern-sources:
+      - pattern: request.$ATTR
+      - pattern: request.get_json(...)
+      - pattern: flask.request.$ATTR
+      - pattern: st.text_input(...)
+      - pattern: st.text_area(...)
+      - pattern: st.chat_input(...)
+      - pattern: streamlit.text_input(...)
+      - pattern: streamlit.text_area(...)
+      - pattern: streamlit.chat_input(...)
+      - pattern: input(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: HumanMessage(content=$P, ...)
+              - pattern: HumanMessage($P, ...)
+              - pattern: $LLM.invoke($P, ...)
+              - pattern: $LLM.ainvoke($P, ...)
+              - pattern: $LLM.stream($P, ...)
+              - pattern: $LLM.predict($P, ...)
+              - pattern: $M.generate_content($P, ...)
+              - pattern: '{"role": "user", "content": $P}'
+              - pattern: ollama.generate(..., prompt=$P, ...)
+          - focus-metavariable: $P
+
+  - id: py-llm-output-to-dangerous-sink
+    mode: taint
+    languages: [python]
+    severity: ERROR
+    message: LLM output reaches code execution, a shell, SQL or raw HTML. Treat model output as untrusted input.
+    metadata: { class: llm_output_handling, confidence: medium }
+    pattern-sources:
+      - pattern: $LLM.invoke(...)
+      - pattern: $LLM.ainvoke(...)
+      - pattern: $LLM.predict(...)
+      - pattern: $C.chat.completions.create(...)
+      - pattern: $C.messages.create(...)
+      - pattern: $C.responses.create(...)
+      - pattern: $M.generate_content(...)
+      - pattern: ollama.chat(...)
+      - pattern: ollama.generate(...)
+    pattern-sinks:
+      - pattern: eval(...)
+      - pattern: exec(...)
+      - pattern: os.system(...)
+      - pattern: os.popen(...)
+      - pattern: subprocess.$F(..., shell=True, ...)
+      - pattern: $CUR.execute(...)
+      - pattern: render_template_string(...)
+      - pattern: Markup(...)
+      - pattern: st.markdown(..., unsafe_allow_html=True, ...)
+      - pattern: st.html(...)
+      - pattern: components.html(...)
+
+  - id: py-llm-output-as-markdown
+    mode: taint
+    languages: [python]
+    severity: WARNING
+    message: LLM output is rendered as markdown; injected output can show phishing links or load remote images that leak data. Render it as plain text or validate it first.
+    metadata: { class: llm_output_handling, confidence: low }
+    pattern-sources:
+      - pattern: $LLM.invoke(...)
+      - pattern: $C.chat.completions.create(...)
+      - pattern: $C.messages.create(...)
+      - pattern: $M.generate_content(...)
+      - pattern: ollama.chat(...)
+    pattern-sinks:
+      - pattern: st.markdown(...)
+      - pattern: st.write(...)
+      - pattern: st.info(...)
+      - pattern: st.warning(...)
+      - pattern: st.error(...)
+      - pattern: st.success(...)
+      - pattern: st.chat_message(...).markdown(...)
+
+  - id: py-hf-model-unpinned-revision
+    languages: [python]
+    severity: WARNING
+    message: Model downloaded from the Hugging Face Hub without a pinned revision; a changed or hijacked repo is loaded silently. Pass revision="<commit hash>".
+    metadata: { class: supply_chain, confidence: high, cwe: [CWE-494] }
+    patterns:
+      - pattern-either:
+          - pattern: SentenceTransformer(...)
+          - pattern: CrossEncoder(...)
+          - pattern: sentence_transformers.SentenceTransformer(...)
+      - pattern-not: SentenceTransformer(..., revision=$R, ...)
+      - pattern-not: CrossEncoder(..., revision=$R, ...)
+      - pattern-not: sentence_transformers.SentenceTransformer(..., revision=$R, ...)
+
+  - id: py-hf-trust-remote-code
+    languages: [python]
+    severity: ERROR
+    message: trust_remote_code=True runs Python code from the model repository on this machine.
+    metadata: { class: supply_chain, confidence: high, cwe: [CWE-829] }
+    pattern: $F(..., trust_remote_code=True, ...)
+
+  - id: py-torch-hub-load
+    languages: [python]
+    severity: WARNING
+    message: torch.hub.load executes hubconf.py from a remote GitHub repository.
+    metadata: { class: supply_chain, confidence: medium, cwe: [CWE-829] }
+    pattern: torch.hub.load(...)
